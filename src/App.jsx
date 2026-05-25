@@ -1902,6 +1902,22 @@ export default function App(){
   const [showSortMenu,setShowSortMenu]=useState(false);
   const [coins,setCoins]=usePersistedState("coins",1250);
   const [totalIssued,setTotalIssued]=usePersistedState("totalIssued",0); // 累計発行コイン残高
+  const [ageConfirmed,setAgeConfirmed]=usePersistedState("ageConfirmed",false);
+  const [ageLimit,setAgeLimit]=usePersistedState("ageLimit",null);
+  const [monthlySpent,setMonthlySpent]=usePersistedState("monthlySpent",{month:"",amount:0});
+  const [reveal,setReveal]=useState(null);
+  const [revealPack,setRevealPack]=useState(null);
+  const [multiReveal,setMultiReveal]=useState(null);
+  const [pendingCards,setPendingCards]=usePersistedState("pendingCards",[]);
+  const [showPendingCards,setShowPendingCards]=useState(false);
+  const [detailPack,setDetailPack]=useState(null);
+  const [history,setHistory]=usePersistedState("history",[]);
+  const [page,setPage]=useState("home");
+  const [notification,setNotification]=useState(null);
+  const [sortOrder,setSortOrder]=useState("default");
+  const [showSortMenu,setShowSortMenu]=useState(false);
+  const [coins,setCoins]=usePersistedState("coins",1250);
+  const [totalIssued,setTotalIssued]=usePersistedState("totalIssued",0); // 累計発行コイン残高
 
   const MAX_ISSUED=10000000; // 1000万コイン上限
 
@@ -1940,7 +1956,13 @@ export default function App(){
   const [deck1,setDeck1]=useState(()=>initDeck());
   const [deck1Idx,setDeck1Idx]=useState(0);
   const [remainings,setRemainingMap]=useState(Object.fromEntries(PACKS.map(p=>[p.id,p.remaining])));
-
+const [user,setUser]=useState(null);
+const isGuest = !user || user.isGuest;
+const [isAdmin,setIsAdmin]=useState(false);
+useEffect(()=>{
+  if(!user||isGuest)return;
+  getDoc(doc(db,"admins",user.id)).then(d=>{if(d.exists())setIsAdmin(true);});
+},[user]);
   const [showAuthModal,setShowAuthModal]=useState(false);
   const [showAgeCheck,setShowAgeCheck]=useState(false);
   const [pendingPurchase,setPendingPurchase]=useState(null); // 年齢確認後に実行する処理
