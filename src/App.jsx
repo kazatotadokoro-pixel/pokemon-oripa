@@ -2013,7 +2013,7 @@ const [showLegal, setShowLegal] = useState(null); // "terms"|"privacy"|"tokusho"
 const [deck1, setDeck1] = useState(() => initDeck());
 const [deck1Idx, setDeck1Idx] = useState(0);
 const [remainings, setRemainingMap] = useState(Object.fromEntries(PACKS.map(p => [p.id, p.remaining])));
-const isGuest = !user || user.isGuest;
+
 useEffect(() => {
   if (!user || isGuest) return;
   getDoc(doc(db, "admins", user.id)).then(d => { if (d.exists()) setIsAdmin(true); });
