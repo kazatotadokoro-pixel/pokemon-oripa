@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-
+import { auth, db } from "./firebase.js";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore"
 const REAL_CARDS = {
   sar: [
     {name:"メガルカリオ ex",rarity:"SAR",img:"https://placehold.co/300x420/1a1a2a/ffffff?text=Card"},
@@ -1712,24 +1714,24 @@ function AuthScreen({onLogin}){
     setErr("");
     if(!email||!pass){setErr("メールアドレスとパスワードを入力してください");return;}
     setLoading(true);
-    setTimeout(()=>{
-      const found=DEMO_ACCOUNTS.find(a=>a.email===email&&a.pass===pass);
-      if(found){onLogin({name:found.name,email:found.email,id:"DEMO-"+Math.random().toString(36).slice(2,8).toUpperCase()});}
-      else{setErr("メールアドレスまたはパスワードが違います");}
-      setLoading(false);
-    },1000);
+    signInWithEmailAndPassword(auth,email,pass)
+      .then(cred=>{onLogin({name:cred.user.displayName||email,email:cred.user.email,id:cred.user.uid});})
+      .catch(e=>{setErr("メールアドレスまたはパスワードが違います");})
+      .finally(()=>setLoading(false));
   };
 
   const handleRegister=()=>{
     setErr("");
     if(!name||!email||!pass){setErr("すべての項目を入力してください");return;}
     if(pass.length<6){setErr("パスワードは6文字以上にしてください");return;}
-    if(!email.includes("@")){setErr("メールアドレスの形式が正しくありません");return;}
     setLoading(true);
-    setTimeout(()=>{
-      onLogin({name,email,id:"USER-"+Math.random().toString(36).slice(2,8).toUpperCase()});
-      setLoading(false);
-    },1200);
+    createUserWithEmailAndPassword(auth,email,pass)
+      .then(cred=>{
+        setDoc(doc(db,"users",cred.user.uid),{name,email,coins:1250,createdAt:new Date().toISOString()});
+        onLogin({name,email:cred.user.email,id:cred.user.uid});
+      })
+      .catch(e=>{setErr("このメールアドレスはすでに使われています");})
+      .finally(()=>setLoading(false));
   };
 
   const sendPhone=()=>{
