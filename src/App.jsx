@@ -1966,7 +1966,11 @@ export default function App(){
   };
 
   // 未ログインは自動的にゲスト扱い
-  const isGuest = !user || user.isGuest;
+  const [isAdmin,setIsAdmin]=useState(false);
+useEffect(()=>{
+  if(!user||isGuest)return;
+  getDoc(doc(db,"admins",user.id)).then(d=>{if(d.exists())setIsAdmin(true);});
+},[user]);
 
   // ログインが必要なアクションのガード
   const requireLogin=(fn)=>{
@@ -2294,7 +2298,7 @@ export default function App(){
       )}
 
       {/* 管理者ボタン（右下固定） */}
-      {user&&!user.isGuest&&(
+      {isAdmin&&(
         <button onClick={()=>setShowAdminPanel(true)} style={{position:"fixed",bottom:80,right:16,zIndex:500,background:"#1a1a2a",border:"1px solid #333",color:"#ffd700",borderRadius:"50%",width:44,height:44,fontSize:18,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
           ⚙️
         </button>
