@@ -1956,7 +1956,6 @@ export default function App(){
   const [deck1,setDeck1]=useState(()=>initDeck());
   const [deck1Idx,setDeck1Idx]=useState(0);
   const [remainings,setRemainingMap]=useState(Object.fromEntries(PACKS.map(p=>[p.id,p.remaining])));
-const [user,setUser]=useState(null);
 const isGuest = !user || user.isGuest;
 const [isAdmin,setIsAdmin]=useState(false);
 useEffect(()=>{
