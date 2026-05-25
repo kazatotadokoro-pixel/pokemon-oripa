@@ -1884,41 +1884,60 @@ function initDeck(){
 }
 
 // ===== App =====
-export default function App(){
-  const [user,setUser]=useState(null);
-  const [ageConfirmed,setAgeConfirmed]=usePersistedState("ageConfirmed",false);
-  const [ageLimit,setAgeLimit]=usePersistedState("ageLimit",null);
-  const [monthlySpent,setMonthlySpent]=usePersistedState("monthlySpent",{month:"",amount:0});
-  const [reveal,setReveal]=useState(null);
-  const [revealPack,setRevealPack]=useState(null);
-  const [multiReveal,setMultiReveal]=useState(null);
-  const [pendingCards,setPendingCards]=usePersistedState("pendingCards",[]);
-  const [showPendingCards,setShowPendingCards]=useState(false);
-  const [detailPack,setDetailPack]=useState(null);
-  const [history,setHistory]=usePersistedState("history",[]);
-  const [page,setPage]=useState("home");
-  const [notification,setNotification]=useState(null);
-  const [sortOrder,setSortOrder]=useState("default");
-  const [showSortMenu,setShowSortMenu]=useState(false);
-  const [coins,setCoins]=usePersistedState("coins",1250);
-  const [totalIssued,setTotalIssued]=usePersistedState("totalIssued",0); // 累計発行コイン残高
-  const [ageConfirmed,setAgeConfirmed]=usePersistedState("ageConfirmed",false);
-  const [ageLimit,setAgeLimit]=usePersistedState("ageLimit",null);
-  const [monthlySpent,setMonthlySpent]=usePersistedState("monthlySpent",{month:"",amount:0});
-  const [reveal,setReveal]=useState(null);
-  const [revealPack,setRevealPack]=useState(null);
-  const [multiReveal,setMultiReveal]=useState(null);
-  const [pendingCards,setPendingCards]=usePersistedState("pendingCards",[]);
-  const [showPendingCards,setShowPendingCards]=useState(false);
-  const [detailPack,setDetailPack]=useState(null);
-  const [history,setHistory]=usePersistedState("history",[]);
-  const [page,setPage]=useState("home");
-  const [notification,setNotification]=useState(null);
-  const [sortOrder,setSortOrder]=useState("default");
-  const [showSortMenu,setShowSortMenu]=useState(false);
-  const [coins,setCoins]=usePersistedState("coins",1250);
-  const [totalIssued,setTotalIssued]=usePersistedState("totalIssued",0); // 累計発行コイン残高
+export default function App() {
+  const [user, setUser] = useState(null);
 
+  const [ageConfirmed, setAgeConfirmed] =
+    usePersistedState("ageConfirmed", false);
+
+  const [ageLimit, setAgeLimit] =
+    usePersistedState("ageLimit", null);
+
+  const [monthlySpent, setMonthlySpent] =
+    usePersistedState("monthlySpent", {
+      month: "",
+      amount: 0,
+    });
+
+  const [reveal, setReveal] = useState(null);
+  const [revealPack, setRevealPack] = useState(null);
+  const [multiReveal, setMultiReveal] = useState(null);
+
+  const [pendingCards, setPendingCards] =
+    usePersistedState("pendingCards", []);
+
+  const [showPendingCards, setShowPendingCards] =
+    useState(false);
+
+  const [detailPack, setDetailPack] = useState(null);
+
+  const [history, setHistory] =
+    usePersistedState("history", []);
+
+  const [page, setPage] = useState("home");
+
+  const [notification, setNotification] =
+    useState(null);
+
+  const [sortOrder, setSortOrder] =
+    useState("default");
+
+  const [showSortMenu, setShowSortMenu] =
+    useState(false);
+
+  const [coins, setCoins] =
+    usePersistedState("coins", 1250);
+
+  // 累計発行コイン残高
+  const [totalIssued, setTotalIssued] =
+    usePersistedState("totalIssued", 0);
+
+  return (
+    <div>
+      {/* App Content */}
+    </div>
+  );
+}
   const MAX_ISSUED=10000000; // 1000万コイン上限
 
   // コイン発行（購入時）：上限チェック付き
