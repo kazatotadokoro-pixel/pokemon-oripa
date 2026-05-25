@@ -1895,10 +1895,14 @@ function initDeck() {
 export default function App() {
   const [user, setUser] = useState(null);
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = 
+  useState(false);
+
+  const isGuest = !user || user?.isGuest;
 
   const [ageConfirmed, setAgeConfirmed] =
-    usePersistedState("ageConfirmed", false);
+    usePersistedState("ageConfirmed", 
+      false);
 
   const [ageLimit, setAgeLimit] =
     usePersistedState("ageLimit", null);
