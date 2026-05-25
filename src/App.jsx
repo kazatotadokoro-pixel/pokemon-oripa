@@ -1887,6 +1887,8 @@ function initDeck(){
 export default function App() {
   const [user, setUser] = useState(null);
 
+const [isAdmin,setIsAdmin]=useState(false);
+
   const [ageConfirmed, setAgeConfirmed] =
     usePersistedState("ageConfirmed", false);
 
@@ -1976,7 +1978,6 @@ export default function App() {
   const [deck1Idx,setDeck1Idx]=useState(0);
   const [remainings,setRemainingMap]=useState(Object.fromEntries(PACKS.map(p=>[p.id,p.remaining])));
 const isGuest = !user || user.isGuest;
-const [isAdmin,setIsAdmin]=useState(false);
 useEffect(()=>{
   if(!user||isGuest)return;
   getDoc(doc(db,"admins",user.id)).then(d=>{if(d.exists())setIsAdmin(true);});
