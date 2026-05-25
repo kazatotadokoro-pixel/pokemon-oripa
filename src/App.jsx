@@ -1900,6 +1900,30 @@ export default function App() {
 
   const isGuest = !user || user?.isGuest;
 
+  const mySections = [
+  {
+    title: "アカウント", items: [
+      { label: "アカウント", right: <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ color: isGuest ? "#555" : "#ccc", fontSize: 13 }}>{isGuest ? "未登録" : user?.name}</span><span style={{ fontSize: 22 }}>{isGuest ? "👤" : "👤"}</span></span>, onPress: isGuest, action: isGuest ? () => setShowAuthModal(true) : undefined },
+      { label: "ユーザーID", right: <span style={{ color: "#888", fontSize: 11, letterSpacing: 0.5 }}>{isGuest ? "未登録" : user?.id}</span>, onPress: false },
+      { label: "年齢区分", right: <span style={{ color: ageLimit?.monthly ? ageLimit.age <= 14 ? "#60b8ff" : "#ffd700" : "#2ecc71", fontSize: 12, fontWeight: 700 }}>{ageLimit?.label || "未設定"}{ageLimit?.monthly ? ` (月¥${ageLimit.monthly.toLocaleString()}まで)` : ""}</span>, onPress: false },
+      { label: "電話番号認証", right: phoneVerified ? <span style={{ color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>認証済み</span> : <span style={{ color: "#d94f6e", fontSize: 13, fontWeight: 700 }}>未認証 ›</span>, onPress: !phoneVerified, action: () => setShowPhoneAuth(true) },
+      { label: "メールアドレス", right: "›", onPress: true },
+      { label: "送付先設定", right: address ? <span style={{ color: "#2ecc71", fontSize: 12 }}>登録済み ›</span> : "›", onPress: true, action: () => setShowAddressModal(true) },
+      { label: "特典コード入力", right: benefitDiscount > 0 ? <span style={{ color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>{benefitDiscount}%OFF適用中</span> : "›", onPress: true, action: () => setShowBenefitModal(true) },
+      { label: "友達招待", right: "›", onPress: true, action: () => isGuest ? setShowAuthModal(true) : setShowInvite(true) },
+      { label: "LINE連携", right: <span style={{ color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>連携済み</span>, onPress: false },
+      { label: <span>アカウント連携 <span style={{ fontSize: 13 }}>G 🍎</span></span>, right: "›", onPress: true },
+      { label: isGuest ? "ログイン / 新規登録" : "ログアウト", right: "›", onPress: true, danger: !isGuest, action: isGuest ? () => setShowAuthModal(true) : () => { setUser(null); setPage("home"); } },
+    ]
+  },
+  {
+    title: "サポート", items: [
+      { label: "お問い合わせ", right: "›", onPress: true, action: () => setShowContact(true) }, { label: "よくある質問", right: "›", onPress: true },
+      { label: "利用規約", right: "›", onPress: true, action: () => setShowLegal("terms") }, { label: "プライバシーポリシー", right: "›", onPress: true, action: () => setShowLegal("privacy") }, { label: "特定商取引法に基づく表記", right: "›", onPress: true, action: () => setShowLegal("tokusho") },
+    ]
+  },
+];
+
   const [ageConfirmed, setAgeConfirmed] =
     usePersistedState("ageConfirmed", 
       false);
@@ -2083,29 +2107,7 @@ const doMultiDraw = (pack, count) => requireLogin(() => {
   setRevealPack({ ...snap, _afterMulti: multi });
 });
 
-const mySections = [
-  {
-    title: "アカウント", items: [
-      { label: "アカウント", right: <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ color: isGuest ? "#555" : "#ccc", fontSize: 13 }}>{isGuest ? "未登録" : user?.name}</span><span style={{ fontSize: 22 }}>{isGuest ? "👤" : "👤"}</span></span>, onPress: isGuest, action: isGuest ? () => setShowAuthModal(true) : undefined },
-      { label: "ユーザーID", right: <span style={{ color: "#888", fontSize: 11, letterSpacing: 0.5 }}>{isGuest ? "未登録" : user?.id}</span>, onPress: false },
-      { label: "年齢区分", right: <span style={{ color: ageLimit?.monthly ? ageLimit.age <= 14 ? "#60b8ff" : "#ffd700" : "#2ecc71", fontSize: 12, fontWeight: 700 }}>{ageLimit?.label || "未設定"}{ageLimit?.monthly ? ` (月¥${ageLimit.monthly.toLocaleString()}まで)` : ""}</span>, onPress: false },
-      { label: "電話番号認証", right: phoneVerified ? <span style={{ color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>認証済み</span> : <span style={{ color: "#d94f6e", fontSize: 13, fontWeight: 700 }}>未認証 ›</span>, onPress: !phoneVerified, action: () => setShowPhoneAuth(true) },
-      { label: "メールアドレス", right: "›", onPress: true },
-      { label: "送付先設定", right: address ? <span style={{ color: "#2ecc71", fontSize: 12 }}>登録済み ›</span> : "›", onPress: true, action: () => setShowAddressModal(true) },
-      { label: "特典コード入力", right: benefitDiscount > 0 ? <span style={{ color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>{benefitDiscount}%OFF適用中</span> : "›", onPress: true, action: () => setShowBenefitModal(true) },
-      { label: "友達招待", right: "›", onPress: true, action: () => isGuest ? setShowAuthModal(true) : setShowInvite(true) },
-      { label: "LINE連携", right: <span style={{ color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>連携済み</span>, onPress: false },
-      { label: <span>アカウント連携 <span style={{ fontSize: 13 }}>G 🍎</span></span>, right: "›", onPress: true },
-      { label: isGuest ? "ログイン / 新規登録" : "ログアウト", right: "›", onPress: true, danger: !isGuest, action: isGuest ? () => setShowAuthModal(true) : () => { setUser(null); setPage("home"); } },
-    ]
-  },
-  {
-    title: "サポート", items: [
-      { label: "お問い合わせ", right: "›", onPress: true, action: () => setShowContact(true) }, { label: "よくある質問", right: "›", onPress: true },
-      { label: "利用規約", right: "›", onPress: true, action: () => setShowLegal("terms") }, { label: "プライバシーポリシー", right: "›", onPress: true, action: () => setShowLegal("privacy") }, { label: "特定商取引法に基づく表記", right: "›", onPress: true, action: () => setShowLegal("tokusho") },
-    ]
-  },
-];
+
 
 return (
   <div style={{ minHeight: "100vh", background: "#06060e", fontFamily: "'Noto Sans JP',sans-serif" }}>
