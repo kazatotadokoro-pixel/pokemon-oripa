@@ -2013,9 +2013,8 @@ const [showLegal, setShowLegal] = useState(null); // "terms"|"privacy"|"tokusho"
 const [deck1, setDeck1] = useState(() => initDeck());
 const [deck1Idx, setDeck1Idx] = useState(0);
 const [remainings, setRemainingMap] = useState(Object.fromEntries(PACKS.map(p => [p.id, p.remaining])));
-
 useEffect(() => {
-  if (!user || isGuest) return;
+  if (!user || user?. isGuest) return;
   getDoc(doc(db, "admins", user.id)).then(d => { if (d.exists()) setIsAdmin(true); });
 }, [user]);
 const [showAuthModal, setShowAuthModal] = useState(false);
