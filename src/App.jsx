@@ -770,6 +770,7 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
     alert("決済エラーが発生しました");
   }
 };
+console.log("handlePay called!", modal, checkLimit);
     if(checkLimit){checkLimit(modal.price,proceed);}else{proceed();}
   };
 
