@@ -2016,7 +2016,7 @@ useEffect(()=>{
     setHistory(prev=>[{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize},...prev]);
     setCoins(c=>c-pack.price);
     setTotalIssued(t=>Math.max(0,t-pack.price));
-    if(!isGuest)updateDoc(doc(db,"users",user.id),{coins:coins-pack.price,totalIssued:Math.max(0,totalIssued-pack.price)});
+    if(!isGuest)setDoc(doc(db,"users",user.id),{coins:coins-pack.price,totalIssued:Math.max(0,totalIssued-pack.price)},{merge:true});
     setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
   });
@@ -2040,7 +2040,7 @@ useEffect(()=>{
     setHistory(prev=>[...cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString(),prize:prizes[i]})),...prev]);
     setCoins(c=>c-totalCost);
     setTotalIssued(t=>Math.max(0,t-totalCost));
-    if(!isGuest)updateDoc(doc(db,"users",user.id),{coins:coins-totalCost,totalIssued:Math.max(0,totalIssued-totalCost)});
+    if(!isGuest)setDoc(doc(db,"users",user.id),{coins:coins-totalCost,totalIssued:Math.max(0,totalIssued-totalCost)},{merge:true});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-actual)}));
     const snap={...pack,remaining:remainings[pack.id]};
     const multi={cards,pack:snap};
