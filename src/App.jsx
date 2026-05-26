@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore"
+import { doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
 const REAL_CARDS = {
   sar: [
     {name:"メガルカリオ ex",rarity:"SAR",img:"https://placehold.co/300x420/1a1a2a/ffffff?text=Card"},
@@ -1905,22 +1905,28 @@ export default function App(){
   const MAX_ISSUED=10000000; // 1000万コイン上限
 
   // コイン発行（購入時）：上限チェック付き
-  const issueCoins=(amount)=>{
-    if(totalIssued+amount>MAX_ISSUED){
-      const canIssue=MAX_ISSUED-totalIssued;
-      if(canIssue<=0){
-        notify("現在コインの販売を一時停止しています（発行上限到達）");
-        return false;
-      }
-      notify(`発行可能残高の関係で${canIssue.toLocaleString()}コインのみ付与されました`);
-      setCoins(c=>c+canIssue);
-      setTotalIssued(MAX_ISSUED);
-      return true;
+ const issueCoins=(amount)=>{
+  if(totalIssued+amount>MAX_ISSUED){
+    const canIssue=MAX_ISSUED-totalIssued;
+    if(canIssue<=0){
+      notify("現在コインの販売を一時停止しています（発行上限到達）");
+      return false;
     }
-    setCoins(c=>c+amount);
-    setTotalIssued(t=>t+amount);
+    notify(`発行可能残高の関係で${canIssue.toLocaleString()}コインのみ付与されました`);
+    const newCoins=coins+canIssue;
+    const newIssued=MAX_ISSUED;
+    setCoins(newCoins);
+    setTotalIssued(newIssued);
+    if(!isGuest)updateDoc(doc(db,"users",user.id),{coins:newCoins,totalIssued:newIssued});
     return true;
-  };
+  }
+  const newCoins=coins+amount;
+  const newIssued=totalIssued+amount;
+  setCoins(newCoins);
+  setTotalIssued(newIssued);
+  if(!isGuest)updateDoc(doc(db,"users",user.id),{coins:newCoins,totalIssued:newIssued});
+  return true;
+};
   const [mailCount]=useState(3);
   const [rank]=useState(42);
   const [showPhoneAuth,setShowPhoneAuth]=useState(false);
@@ -1966,7 +1972,20 @@ export default function App(){
 
   // 未ログインは自動的にゲスト扱い
   const isGuest = !user || user.isGuest;
-const [isAdmin,setIsAdmin]=useState(false);
+  const [isAdmin,setIsAdmin]=useState(false);
+  // Firestoreからコイン残高を読み込む
+useEffect(()=>{
+  if(!user||isGuest)return;
+  const ref=doc(db,"users",user.id);
+  const unsub=onSnapshot(ref,(d)=>{
+    if(d.exists()){
+      const data=d.data();
+      if(data.coins!==undefined)setCoins(data.coins);
+      if(data.totalIssued!==undefined)setTotalIssued(data.totalIssued);
+    }
+  });
+  return()=>unsub();
+},[user]);
 useEffect(()=>{
   if(!user||isGuest)return;
   getDoc(doc(db,"admins",user.id)).then(d=>{if(d.exists())setIsAdmin(true);});
@@ -1997,6 +2016,7 @@ useEffect(()=>{
     setHistory(prev=>[{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize},...prev]);
     setCoins(c=>c-pack.price);
     setTotalIssued(t=>Math.max(0,t-pack.price));
+    if(!isGuest)updateDoc(doc(db,"users",user.id),{coins:coins-pack.price,totalIssued:Math.max(0,totalIssued-pack.price)});
     setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
   });
@@ -2020,6 +2040,7 @@ useEffect(()=>{
     setHistory(prev=>[...cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString(),prize:prizes[i]})),...prev]);
     setCoins(c=>c-totalCost);
     setTotalIssued(t=>Math.max(0,t-totalCost));
+    if(!isGuest)updateDoc(doc(db,"users",user.id),{coins:coins-totalCost,totalIssued:Math.max(0,totalIssued-totalCost)});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-actual)}));
     const snap={...pack,remaining:remainings[pack.id]};
     const multi={cards,pack:snap};
