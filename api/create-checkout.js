@@ -1,6 +1,8 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+import Stripe from 'stripe';
 
-module.exports = async (req, res) => {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -22,8 +24,8 @@ module.exports = async (req, res) => {
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_URL || 'https://pokemon-oripa-mwoj.vercel.app'}/success?coins=${coins}&userId=${userId}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_URL || 'https://pokemon-oripa-mwoj.vercel.app'}/cancel`,
+      success_url: `https://pokemon-oripa-mwoj.vercel.app/?coins=${coins}&userId=${userId}`,
+      cancel_url: `https://pokemon-oripa-mwoj.vercel.app/`,
       metadata: { userId, coins: String(coins) },
     });
 
@@ -31,4 +33,4 @@ module.exports = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-};
+}
