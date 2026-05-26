@@ -756,6 +756,7 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
 
   const handlePay=(method)=>{
     const proceed=async()=>{
+      console.log("proceed called!", modal);
   try{
     const res=await fetch("/api/create-checkout",{
       method:"POST",
