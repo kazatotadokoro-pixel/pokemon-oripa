@@ -1882,6 +1882,13 @@ function initDeck(){
 // ===== App =====
 export default function App(){
   const [user,setUser]=useState(null);
+  useEffect(()=>{
+  const unsub=auth.onAuthStateChanged(u=>{
+    if(u)setUser({name:u.displayName||u.email,email:u.email,id:u.uid});
+    else setUser(null);
+  });
+  return()=>unsub();
+},[]);
   const [ageConfirmed,setAgeConfirmed]=usePersistedState("ageConfirmed",false);
   const [ageLimit,setAgeLimit]=usePersistedState("ageLimit",null);
   const [monthlySpent,setMonthlySpent]=usePersistedState("monthlySpent",{month:"",amount:0});
