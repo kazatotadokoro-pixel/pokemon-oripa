@@ -1889,6 +1889,18 @@ export default function App(){
   });
   return()=>unsub();
 },[]);
+// Stripe決済完了後のコイン付与
+useEffect(()=>{
+  const params=new URLSearchParams(window.location.search);
+  const coins=params.get("coins");
+  const userId=params.get("userId");
+  if(coins&&userId){
+    const amount=parseInt(coins);
+    issueCoins(amount);
+    notify(`${amount.toLocaleString()}コインが付与されました！🎉`);
+    window.history.replaceState({},"","/");
+  }
+},[user]);
   const [ageConfirmed,setAgeConfirmed]=usePersistedState("ageConfirmed",false);
   const [ageLimit,setAgeLimit]=usePersistedState("ageLimit",null);
   const [monthlySpent,setMonthlySpent]=usePersistedState("monthlySpent",{month:"",amount:0});
