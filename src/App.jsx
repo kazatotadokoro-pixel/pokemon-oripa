@@ -737,7 +737,7 @@ function LineupPage({packs,sortOrder,setSortOrder,showSortMenu,setShowSortMenu,o
 }
 
 // ===== ShopPage =====
-function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit}){
+function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
   const [modal,setModal]=useState(null);
   const [code,setCode]=useState("");
   const [msg,setMsg]=useState(null);
@@ -758,7 +758,11 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit}){
   const handlePay=(method)=>{
     const proceed=async()=>{
       try{
-        const res=await fetch("/api/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:modal.price,coins:modal.coins,userId:userId||"guest"})});
+        const res=await fetch("/api/create-checkout",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({amount:modal.price,coins:modal.coins,userId:userId||"guest"})
+        });
         const data=await res.json();
         if(data.url){window.location.href=data.url;}
         else{alert("決済エラーが発生しました");}
@@ -2142,7 +2146,7 @@ useEffect(()=>{
         {page==="history"&&<WinReportPage user={user} isGuest={isGuest} onRequireLogin={()=>setShowAuthModal(true)}/>}
         {page==="ranking"&&<RankingPage history={history} user={user} coins={coins} inviteCount={inviteCount}/>}
 
-        {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit}/>}
+        {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit} userId={user?.id}/>}
 
         {page==="mypage"&&(
           <div style={{fontFamily:"'Noto Sans JP',sans-serif",maxWidth:500,margin:"0 auto"}}>

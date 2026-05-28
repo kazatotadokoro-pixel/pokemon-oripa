@@ -737,7 +737,7 @@ function LineupPage({packs,sortOrder,setSortOrder,showSortMenu,setShowSortMenu,o
 }
 
 // ===== ShopPage =====
-function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit}){
+function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
   const [modal,setModal]=useState(null);
   const [code,setCode]=useState("");
   const [msg,setMsg]=useState(null);
@@ -756,27 +756,20 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit}){
   };
 
   const handlePay=(method)=>{
-    const proceed=()=>{
-      setSelectedPay(method);
-      setStep("processing");
-      setProgress(0);
-      const steps=[
-        {pct:20,label:"決済サーバーに接続中..."},
-        {pct:45,label:"支払い情報を確認中..."},
-        {pct:70,label:"決済を処理中..."},
-        {pct:90,label:"コインを付与中..."},
-        {pct:100,label:"完了！"},
-      ];
-      let i=0;
-      const tick=()=>{
-        if(i>=steps.length){setStep("complete");onPurchase&&onPurchase(modal.coins);return;}
-        setProgress(steps[i].pct);i++;
-        setTimeout(tick,600);
-      };
-      setTimeout(tick,400);
+    const proceed=async()=>{
+      try{
+        const res=await fetch("/api/create-checkout",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({amount:modal.price,coins:modal.coins,userId:userId||"guest"})
+        });
+        const data=await res.json();
+        if(data.url){window.location.href=data.url;}
+        else{alert("決済エラーが発生しました");}
+      }catch(e){alert("決済エラーが発生しました");}
     };
     if(checkLimit){checkLimit(modal.price,proceed);}else{proceed();}
-  };
+  };;
 
   return(
     <div>
@@ -2153,7 +2146,7 @@ useEffect(()=>{
         {page==="history"&&<WinReportPage user={user} isGuest={isGuest} onRequireLogin={()=>setShowAuthModal(true)}/>}
         {page==="ranking"&&<RankingPage history={history} user={user} coins={coins} inviteCount={inviteCount}/>}
 
-        {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit}/>}
+        {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit} userId={user?.id}/>}
 
         {page==="mypage"&&(
           <div style={{fontFamily:"'Noto Sans JP',sans-serif",maxWidth:500,margin:"0 auto"}}>
