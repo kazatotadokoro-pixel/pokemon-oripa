@@ -1999,6 +1999,15 @@ export default function App(){
     if(!user||isGuest)return;
     getDoc(doc(db,"admins",user.id)).then(d=>{if(d.exists())setIsAdmin(true);else setIsAdmin(false);});
   },[user]);
+  // Firestoreから口数をリアルタイム読み込み
+useEffect(()=>{
+  const unsub=onSnapshot(doc(db,"packs","pack1"),(d)=>{
+    if(d.exists()){
+      setRemainingMap(prev=>({...prev,1:d.data().remaining}));
+    }
+  });
+  return()=>unsub();
+},[]);
   useEffect(()=>{
     if(!user||isGuest)return;
     const ref=doc(db,"users",user.id);
@@ -2040,6 +2049,7 @@ export default function App(){
     setTotalIssued(t=>Math.max(0,t-pack.price));
     setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
+    if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
   });
 
   const doMultiDraw=(pack,count)=>requireLogin(()=>{
@@ -2062,6 +2072,7 @@ export default function App(){
     setCoins(c=>c-totalCost);
     setTotalIssued(t=>Math.max(0,t-totalCost));
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-actual)}));
+    if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
     const snap={...pack,remaining:remainings[pack.id]};
     const multi={cards,pack:snap};
     const RO={"1等":0,"2等":1,"3等":2,"4等":3,"ハズレ":4};
