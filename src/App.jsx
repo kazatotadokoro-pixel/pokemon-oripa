@@ -2037,6 +2037,7 @@ export default function App(){
       : pack.prizes.find(p=>p.rarity===card.rarity);
     setHistory(prev=>[{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize},...prev]);
     setCoins(c=>c-pack.price);
+    if(!isGuest&&user)setDoc(doc(db,"users",user.id),{coins:coins-pack.price},{merge:true});
     setTotalIssued(t=>Math.max(0,t-pack.price));
     setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
