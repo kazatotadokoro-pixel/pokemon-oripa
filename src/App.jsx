@@ -28,7 +28,7 @@ const IMG_KAKUMEI = "https://placehold.co/300x420/1a1a2a/ffffff?text=Card";
 const INVITE_COIN = "https://placehold.co/300x420/1a1a2a/ffffff?text=Card";
 
 const PACKS = [
-  { id:1, name:"メガルカリオ ex パック", subtitle:"MEGA LUCARIO EX PACK", price:300, total:160, remaining:143, accent:"#ffd700", bg:"linear-gradient(160deg,#0a1628,#1a2d50)", headerBg:"linear-gradient(135deg,#1565c0,#0d47a1)", tag:"人気No.1", note:"1/8で3等以上確定！", category:"regular",
+  { id:1, name:"メガルカリオ ex パック", subtitle:"MEGA LUCARIO EX PACK", price:300, total:160, remaining:160, accent:"#ffd700", bg:"linear-gradient(160deg,#0a1628,#1a2d50)", headerBg:"linear-gradient(135deg,#1565c0,#0d47a1)", tag:"人気No.1", note:"1/8で3等以上確定！", category:"regular",
     prizes:[{rank:"1等",label:"メガルカリオ ex SAR",color:"#ff4488",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"メガズルズキン / ルリナ / サイトウ 他",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"1,000円相当（SAR,SR,UR,RR,パックなど）",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"なにかのRRカード",color:"#60b8ff",emoji:"🃏",rarity:"RR"}]},
   { id:2, name:"ピカチュウ ex パック", subtitle:"PIKACHU EX PACK", price:500, total:100, remaining:88, accent:"#ffe066", bg:"linear-gradient(160deg,#1a1400,#3a2e00)", headerBg:"linear-gradient(135deg,#f9a825,#f57f17)", tag:"SAR確率UP", note:"15/100口で確定", category:"recommend",
     prizes:[{rank:"1等",label:"ピカチュウ ex SAR",color:"#ff4488",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"SR各種",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"RRカード各種",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"U/Cカード",color:"#555",emoji:"🃏",rarity:"C"}]},
