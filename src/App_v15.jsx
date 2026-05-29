@@ -316,7 +316,7 @@ function MultiReveal({cards,pack,onClose,onRedeem,onShip}){
       <div style={{background:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #eee",flexShrink:0,boxShadow:"0 2px 4px rgba(0,0,0,0.05)"}}>
         <div style={{fontWeight:900,fontSize:16,color:"#111"}}>獲得カード一覧</div>
         {best&&<div style={{background:"#d94f6e",borderRadius:20,padding:"4px 16px",color:"#fff",fontWeight:900,fontSize:13}}>🎉 {best.prizeRank} 当選！</div>}
-        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
+        <button onClick={()=>onClose(cards)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
       </div>
 
       {/* カードリスト */}
@@ -1401,7 +1401,7 @@ function AddressModal({current,onClose,onSave}){
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto",fontFamily:"'Noto Sans JP',sans-serif",padding:"28px 24px 40px"}}>
         <div style={{display:"flex",alignItems:"center",marginBottom:20}}>
           <div style={{flex:1,fontWeight:900,fontSize:17,color:"#111"}}>📦 送付先の登録</div>
-          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
+          <button onClick={()=>onClose(cards)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {[
@@ -2220,6 +2220,8 @@ useEffect(()=>{
       {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{setReveal(null);setRevealPack(null);}} onConfirm={()=>{setReveal(null);setRevealPack(null);}} onRedeem={()=>{const singleCard=revealPack._singleCard;const rank=singleCard?.prizeRank||"ハズレ";const amount=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}if(singleCard)setPendingCards(p=>p.filter(c=>c.date!==singleCard.date));notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);setReveal(null);setRevealPack(null);}}/>}
       {multiReveal&&<MultiReveal cards={multiReveal.cards} pack={multiReveal.pack}
         onClose={(remainCards)=>{
+          const toAdd=remainCards||multiReveal?.cards||[];
+          if(toAdd.length>0)setPendingCards(p=>[...p,...toAdd]);
           setMultiReveal(null);
         }}
         onShip={(checkedIdx,allCards)=>{
