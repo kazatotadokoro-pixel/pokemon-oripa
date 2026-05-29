@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
 
 const REAL_CARDS = {
   sar: [
@@ -2220,6 +2220,8 @@ useEffect(()=>{
       {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{setReveal(null);setRevealPack(null);}} onConfirm={()=>{setReveal(null);setRevealPack(null);}} onRedeem={()=>{const singleCard=revealPack._singleCard;const rank=singleCard?.prizeRank||"ハズレ";const amount=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}if(singleCard)setPendingCards(p=>p.filter(c=>c.date!==singleCard.date));notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);setReveal(null);setRevealPack(null);}}/>}
       {multiReveal&&<MultiReveal cards={multiReveal.cards} pack={multiReveal.pack}
         onClose={(remainCards)=>{
+          if(remainCards&&remainCards.length>0)setPendingCards(p=>[...p,...remainCards]);
+          else if(multiReveal?.cards)setPendingCards(p=>[...p,...multiReveal.cards]);
           setMultiReveal(null);
         }}
         onShip={(checkedIdx,allCards)=>{
