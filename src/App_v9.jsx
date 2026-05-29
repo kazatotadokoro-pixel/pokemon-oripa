@@ -122,7 +122,7 @@ function SantouCard({size=140, showText=true}){
 }
 
 // ===== CardReveal =====
-function CardReveal({card,pack,onClose,onConfirm}){
+function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const prize=card.prizeRank
     ? pack.prizes.find(p=>p.rank===card.prizeRank)
     : pack.prizes.find(p=>p.rarity===card.rarity);
@@ -259,7 +259,10 @@ function CardReveal({card,pack,onClose,onConfirm}){
             <div style={{textAlign:"center",marginTop:20,zIndex:10}}>
               <div style={{color:"#444",fontSize:11,marginBottom:4}}>{card.name} [{card.rarity}]</div>
               {revealed
-                ?<button onClick={onClose} style={{marginTop:8,background:"transparent",border:`1px solid ${cs.border}55`,color:cs.border,padding:"11px 56px",borderRadius:40,fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:4,cursor:"pointer"}} onMouseEnter={e=>e.target.style.background=`${cs.border}18`} onMouseLeave={e=>e.target.style.background="transparent"}>CLOSE</button>
+                ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,marginTop:8}}>
+                  <button onClick={onClose} style={{background:"transparent",border:`1px solid ${cs.border}55`,color:cs.border,padding:"11px 56px",borderRadius:40,fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:4,cursor:"pointer"}} onMouseEnter={e=>e.target.style.background=`${cs.border}18`} onMouseLeave={e=>e.target.style.background="transparent"}>CLOSE</button>
+                  {onRedeem&&<button onClick={()=>onRedeem(card)} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"10px 32px",borderRadius:40,fontSize:13,fontWeight:900,cursor:"pointer"}}>🪙 コインに還元</button>}
+                </div>
                 :<button onClick={()=>onConfirm?onConfirm():onClose()} style={{marginTop:8,background:cs.border,border:"none",color:"#000",padding:"14px 48px",borderRadius:40,fontFamily:"'Noto Sans JP',sans-serif",fontSize:14,fontWeight:900,cursor:"pointer"}} onMouseEnter={e=>e.target.style.opacity="0.85"} onMouseLeave={e=>e.target.style.opacity="1"}>カードを確認する →</button>
               }
             </div>
@@ -1928,7 +1931,7 @@ export default function App(){
       if(!isGuest&&user)setDoc(doc(db,"users",user.id),{coins:coins+canIssue,totalIssued:MAX_ISSUED},{merge:true});
       return true;
     }
-    if(!isGuest&&user)setDoc(doc(db,"users",user.id),{coins:coins+amount,totalIssued:totalIssued+amount},{merge:true});
+    if(!isGuest&&user)setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});
     return true;
   };
   const [mailCount]=useState(3);
@@ -2021,15 +2024,14 @@ useEffect(()=>{
       ? pack.prizes.find(p=>p.rank===card.prizeRank)
       : pack.prizes.find(p=>p.rarity===card.rarity);
     setHistory(prev=>[{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize},...prev]);
-    const newCoins=coins-pack.price;
-    const newIssued=Math.max(0,totalIssued-pack.price);
-    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:newCoins,totalIssued:newIssued},{merge:true});}
-    else{setCoins(newCoins);setTotalIssued(newIssued);}
+    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-pack.price),totalIssued:increment(-pack.price)},{merge:true});}
+    else{setCoins(c=>c-pack.price);setTotalIssued(t=>Math.max(0,t-pack.price));}
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
-    setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
-    setPendingCards(prev=>[...prev,{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize}]);
+    const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
+    setPendingCards(prev=>[...prev,cardWithPrize]);
+    setMultiReveal({cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}});
   });
 
   const doMultiDraw=(pack,count)=>requireLogin(()=>{
@@ -2049,10 +2051,8 @@ useEffect(()=>{
       ? pack.prizes.find(p=>p.rank===c.prizeRank)
       : pack.prizes.find(p=>p.rarity===c.rarity));
     setHistory(prev=>[...cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString(),prize:prizes[i]})),...prev]);
-    const newCoinsM=coins-totalCost;
-    const newIssuedM=Math.max(0,totalIssued-totalCost);
-    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:newCoinsM,totalIssued:newIssuedM},{merge:true});}
-    else{setCoins(newCoinsM);setTotalIssued(newIssuedM);}
+    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-totalCost),totalIssued:increment(-totalCost)},{merge:true});}
+    else{setCoins(c=>c-totalCost);setTotalIssued(t=>Math.max(0,t-totalCost));}
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-actual)}));
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
@@ -2216,7 +2216,7 @@ useEffect(()=>{
       </nav>
 
       {detailPack&&<PackDetail pack={packs.find(p=>p.id===detailPack.id)||detailPack} onClose={()=>setDetailPack(null)} onDraw={doDraw} onMultiDraw={doMultiDraw}/>}
-      {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{const a=revealPack._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}} onConfirm={()=>{const a=revealPack._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}}/>}
+      {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{const a=revealPack._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}} onConfirm={()=>{const a=revealPack._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}} onRedeem={(card)=>{const rank=card.prizeRank||"ハズレ";const amount=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}setPendingCards(p=>p.filter(c=>c!==card));notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);setReveal(null);setRevealPack(null);}}/>}
       {multiReveal&&<MultiReveal cards={multiReveal.cards} pack={multiReveal.pack}
         onClose={(remainCards)=>{
           if(remainCards&&remainCards.length>0) setPendingCards(p=>[...p,...remainCards]);
@@ -2244,7 +2244,7 @@ useEffect(()=>{
           // 還元：チェック済みを還元、残りは保留へ
           const remaining=allCards.filter((_,i)=>!checkedIdx.has(i));
           if(remaining.length>0) setPendingCards(p=>[...p,...remaining]);
-          setCoins(c=>c+amount);
+          if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}
           notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
           setMultiReveal(null);
         }}
@@ -2285,8 +2285,7 @@ useEffect(()=>{
                   </div>
                   <button onClick={()=>{
                     const amount=parseInt(coinVal.replace(/,/g,""))||0;
-                    const newCoins=coins+amount;
-                    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:newCoins,totalIssued:totalIssued+amount},{merge:true});}else{setCoins(newCoins);}
+                    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}
                     setPendingCards(p=>p.filter((_,j)=>j!==i));
                     notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
                   }} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>還元</button>

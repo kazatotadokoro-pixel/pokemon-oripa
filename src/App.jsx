@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
 
 const REAL_CARDS = {
   sar: [
@@ -2027,10 +2027,11 @@ useEffect(()=>{
     if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-pack.price),totalIssued:increment(-pack.price)},{merge:true});}
     else{setCoins(c=>c-pack.price);setTotalIssued(t=>Math.max(0,t-pack.price));}
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
-    setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
-    setPendingCards(prev=>[...prev,{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize}]);
+    const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
+    setPendingCards(prev=>[...prev,cardWithPrize]);
+    setMultiReveal({cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}});
   });
 
   const doMultiDraw=(pack,count)=>requireLogin(()=>{
