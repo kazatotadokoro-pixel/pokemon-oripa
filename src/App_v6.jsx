@@ -1956,12 +1956,6 @@ export default function App(){
 
   // 月次課金チェック（年齢確認込み）
   const checkMonthlyLimit=(cost,onPass)=>{
-    // 未確認なら年齢確認モーダルを出す
-    if(!ageConfirmed){
-      setPendingPurchase(()=>()=>checkMonthlyLimit(cost,onPass));
-      setShowAgeCheck(true);
-      return false;
-    }
     if(!ageLimit?.monthly){onPass&&onPass();return true;}
     const nowMonth=new Date().toISOString().slice(0,7);
     const spent=monthlySpent.month===nowMonth?monthlySpent.amount:0;
@@ -2035,6 +2029,7 @@ useEffect(()=>{
     setReveal(card);setRevealPack({...pack,remaining:remainings[pack.id]});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
+    setPendingCards(prev=>[...prev,{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize}]);
   });
 
   const doMultiDraw=(pack,count)=>requireLogin(()=>{
@@ -2290,7 +2285,8 @@ useEffect(()=>{
                   </div>
                   <button onClick={()=>{
                     const amount=parseInt(coinVal.replace(/,/g,""))||0;
-                    setCoins(c=>c+amount);
+                    const newCoins=coins+amount;
+                    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:newCoins,totalIssued:totalIssued+amount},{merge:true});}else{setCoins(newCoins);}
                     setPendingCards(p=>p.filter((_,j)=>j!==i));
                     notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
                   }} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>還元</button>
