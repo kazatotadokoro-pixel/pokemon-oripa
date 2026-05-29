@@ -2030,8 +2030,9 @@ useEffect(()=>{
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
     const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
-    setPendingCards(prev=>[...prev,cardWithPrize]);
-    setMultiReveal({cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}});
+    const singleMulti={cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}};
+    setReveal(card);
+    setRevealPack({...pack,remaining:remainings[pack.id],_afterMulti:singleMulti});
   });
 
   const doMultiDraw=(pack,count)=>requireLogin(()=>{
@@ -2240,13 +2241,8 @@ useEffect(()=>{
         }}
         onRedeem={(amount,checkedIdx,allCards)=>{
           // 還元：チェック済みを還元、残りは保留へ
-          const redeemed=allCards.filter((_,i)=>checkedIdx.has(i));
           const remaining=allCards.filter((_,i)=>!checkedIdx.has(i));
-          // pendingCardsから還元したカードを削除して残りを追加
-          setPendingCards(prev=>{
-            const filtered=prev.filter(p=>!redeemed.some(r=>r===p||r.date===p.date));
-            return remaining.length>0?[...filtered,...remaining]:filtered;
-          });
+          if(remaining.length>0)setPendingCards(p=>[...p,...remaining]);
           if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}
           notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
           setMultiReveal(null);

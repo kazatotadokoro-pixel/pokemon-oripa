@@ -2030,8 +2030,9 @@ useEffect(()=>{
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
     if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
     const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
-    setPendingCards(prev=>[...prev,cardWithPrize]);
-    setMultiReveal({cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}});
+    const singleMulti={cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}};
+    setReveal(card);
+    setRevealPack({...pack,remaining:remainings[pack.id],_afterMulti:singleMulti});
   });
 
   const doMultiDraw=(pack,count)=>requireLogin(()=>{
@@ -2216,11 +2217,9 @@ useEffect(()=>{
       </nav>
 
       {detailPack&&<PackDetail pack={packs.find(p=>p.id===detailPack.id)||detailPack} onClose={()=>setDetailPack(null)} onDraw={doDraw} onMultiDraw={doMultiDraw}/>}
-      {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{const a=revealPack._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}} onConfirm={()=>{const a=revealPack._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}} onRedeem={(card)=>{const rank=card.prizeRank||"ハズレ";const amount=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}setPendingCards(p=>p.filter(c=>c!==card));notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);setReveal(null);setRevealPack(null);}}/>}
+      {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{setReveal(null);setRevealPack(null);}} onConfirm={()=>{setReveal(null);setRevealPack(null);}} onRedeem={()=>{const singleCard=revealPack._singleCard;const rank=singleCard?.prizeRank||"ハズレ";const amount=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}if(singleCard)setPendingCards(p=>p.filter(c=>c.date!==singleCard.date));notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);setReveal(null);setRevealPack(null);}}/>}
       {multiReveal&&<MultiReveal cards={multiReveal.cards} pack={multiReveal.pack}
         onClose={(remainCards)=>{
-          if(remainCards&&remainCards.length>0) setPendingCards(p=>[...p,...remainCards]);
-          else setPendingCards(p=>[...p,...multiReveal.cards]);
           setMultiReveal(null);
         }}
         onShip={(checkedIdx,allCards)=>{
@@ -2242,13 +2241,8 @@ useEffect(()=>{
         }}
         onRedeem={(amount,checkedIdx,allCards)=>{
           // 還元：チェック済みを還元、残りは保留へ
-          const redeemed=allCards.filter((_,i)=>checkedIdx.has(i));
           const remaining=allCards.filter((_,i)=>!checkedIdx.has(i));
-          // pendingCardsから還元したカードを削除して残りを追加
-          setPendingCards(prev=>{
-            const filtered=prev.filter(p=>!redeemed.some(r=>r===p||r.date===p.date));
-            return remaining.length>0?[...filtered,...remaining]:filtered;
-          });
+          if(remaining.length>0)setPendingCards(p=>[...p,...remaining]);
           if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}
           notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
           setMultiReveal(null);
