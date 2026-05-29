@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
 
 const REAL_CARDS = {
   sar: [
