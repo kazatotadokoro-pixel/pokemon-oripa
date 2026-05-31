@@ -2220,7 +2220,7 @@ useEffect(()=>{
       </nav>
 
       {detailPack&&<PackDetail pack={packs.find(p=>p.id===detailPack.id)||detailPack} onClose={()=>setDetailPack(null)} onDraw={doDraw} onMultiDraw={doMultiDraw}/>}
-      {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{setReveal(null);setRevealPack(null);}} onConfirm={()=>{setReveal(null);setRevealPack(null);}} onRedeem={()=>{const singleCard=revealPack._singleCard;const rank=singleCard?.prizeRank||"ハズレ";const amount=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}if(singleCard)setPendingCards(p=>p.filter(c=>c.date!==singleCard.date));notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);setReveal(null);setRevealPack(null);}}/>}
+      {reveal&&revealPack&&<CardReveal card={reveal} pack={revealPack} onClose={()=>{const a=revealPack?._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}} onConfirm={()=>{const a=revealPack?._afterMulti;setReveal(null);setRevealPack(null);if(a)setMultiReveal(a);}}/>}
       {multiReveal&&<MultiReveal cards={multiReveal.cards} pack={multiReveal.pack}
         onClose={(remainCards)=>{
           setMultiReveal(null);
