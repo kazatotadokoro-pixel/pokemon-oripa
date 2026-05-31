@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
 
 const REAL_CARDS = {
@@ -1724,7 +1724,7 @@ function AuthScreen({onLogin}){
     setLoading(true);
     createUserWithEmailAndPassword(auth,email,pass)
       .then(cred=>{
-        setDoc(doc(db,"users",cred.user.uid),{name,email,coins:1250,createdAt:new Date().toISOString()});
+        setDoc(doc(db,"users",cred.user.uid),{name,email,coins:1250,createdAt:new Date().toISOString()});sendEmailVerification(cred.user);
         onLogin({name,email:cred.user.email,id:cred.user.uid});
       })
       .catch(e=>{setErr("このメールアドレスはすでに使われています");})
