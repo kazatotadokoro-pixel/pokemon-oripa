@@ -2230,15 +2230,12 @@ useEffect(()=>{
           const remaining=allCards.filter((_,i)=>!checkedIdx.has(i));
           if(remaining.length>0) setPendingCards(p=>[...p,...remaining]);
           // 発送申請を追加
-          setShipRequests(prev=>[...prev,{
-            id:"REQ-"+Date.now(),
-            user:user?.name||"ゲスト",
-            userId:user?.id||"GUEST",
-            cards:shipped,
-            address:address||null,
-            status:"pending", // pending / shipped / done
-            date:new Date().toLocaleString(),
-          }]);
+          const newReq={id:"REQ-"+Date.now(),user:user?.name||"ゲスト",userId:user?.id||"GUEST",cards:shipped,address:address||null,status:"pending",date:new Date().toLocaleString()};
+          setShipRequests(prev=>[...prev,newReq]);
+          if(!isGuest&&user){
+            const reqForDB={...newReq,cards:shipped.map(c=>({name:c.name,rarity:c.rarity,prizeRank:c.prizeRank,packName:c.packName,date:c.date}))};
+            setDoc(doc(db,"shipRequests",newReq.id),reqForDB);
+          }
           notify(`${checkedIdx.size}枚の発送申請を受け付けました 📦`);
           setMultiReveal(null);
         }}
@@ -2320,7 +2317,7 @@ useEffect(()=>{
       {showPhoneAuth&&<PhoneAuthModal onClose={()=>setShowPhoneAuth(false)} onVerified={()=>{setPhoneVerified(true);notify("電話番号認証が完了しました！");}}/>}
       {showBenefitModal&&<BenefitCodeModal onClose={()=>setShowBenefitModal(false)} currentDiscount={benefitDiscount} onApply={(pct)=>{setBenefitDiscount(pct);notify(`特典コード適用！コインが${pct}%OFFになりました 🎉`);setShowBenefitModal(false);}}/>}
       {showAddressModal&&<AddressModal current={address} onClose={()=>setShowAddressModal(false)} onSave={(addr)=>{setAddress(addr);notify("住所を登録しました！");setShowAddressModal(false);}}/>}
-      {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED}/>}
+      {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED}/>}
 
       {/* ログインモーダル */}
       {showAuthModal&&(

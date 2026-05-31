@@ -2232,7 +2232,10 @@ useEffect(()=>{
           // 発送申請を追加
           const newReq={id:"REQ-"+Date.now(),user:user?.name||"ゲスト",userId:user?.id||"GUEST",cards:shipped,address:address||null,status:"pending",date:new Date().toLocaleString()};
           setShipRequests(prev=>[...prev,newReq]);
-          if(!isGuest&&user){setDoc(doc(db,"shipRequests",newReq.id),newReq);}
+          if(!isGuest&&user){
+            const reqForDB={...newReq,cards:shipped.map(c=>({name:c.name,rarity:c.rarity,prizeRank:c.prizeRank,packName:c.packName,date:c.date}))};
+            setDoc(doc(db,"shipRequests",newReq.id),reqForDB);
+          }
           notify(`${checkedIdx.size}枚の発送申請を受け付けました 📦`);
           setMultiReveal(null);
         }}
