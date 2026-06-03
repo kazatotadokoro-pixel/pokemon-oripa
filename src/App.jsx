@@ -1725,7 +1725,7 @@ function AuthScreen({onLogin}){
     createUserWithEmailAndPassword(auth,email,pass)
       .then(cred=>{
         setDoc(doc(db,"users",cred.user.uid),{name,email,coins:1250,createdAt:new Date().toISOString()});
-        sendEmailVerification(cred.user).then(()=>alert("確認メールを送信しました。メール内のリンクをクリックして認証を完了してください。")).catch(err=>alert("メール送信エラー: "+err.code));
+        sendEmailVerification(cred.user).then(()=>console.log("VERIFY_OK 送信成功")).catch(err=>console.log("VERIFY_ERR",err.code,err.message));
         onLogin({name,email:cred.user.email,id:cred.user.uid});
       })
       .catch(e=>{setErr("このメールアドレスはすでに使われています");})
