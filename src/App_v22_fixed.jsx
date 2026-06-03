@@ -130,149 +130,220 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const rankNum=effectiveRank==="1等"?1:effectiveRank==="2等"?2:effectiveRank==="3等"?3:effectiveRank==="ハズレ"?0:4;
   const isPuchun=rankNum>=1&&rankNum<=3;
   const isRedCD=rankNum>=1&&rankNum<=3;
-  const cdColor=isRedCD?"#ff2244":"#2266ff";
-  const cdGlow=isRedCD?"rgba(255,34,68,0.8)":"rgba(34,102,255,0.8)";
-  const cdBg=isRedCD?"radial-gradient(ellipse 80% 80% at 50% 50%,#3a0010,#000)":"radial-gradient(ellipse 80% 80% at 50% 50%,#00103a,#000)";
-  const cs=rankNum===1?{bg:"linear-gradient(135deg,#ff0080,#ff8800,#ffff00,#00ff80,#0080ff,#8800ff,#ff0080)",border:"#fff",glow:"rgba(255,255,255,0.9)",label:"1等",shimmer:true,rainbow:true}
-    :rankNum===2?{bg:"linear-gradient(135deg,#3a2200,#ffd700,#fff0a0,#ffb800,#ffd700,#3a2200)",border:"#ffd700",glow:"rgba(255,215,0,0.9)",label:"2等",shimmer:true,rainbow:false}
-    :rankNum===3?{bg:"linear-gradient(135deg,#4a0010,#ff2244,#ff88aa,#ff2244,#4a0010)",border:"#ff2244",glow:"rgba(255,34,68,0.7)",label:"3等",shimmer:true,rainbow:false}
+  const cdColor=isRedCD?"#ff2244":"#4488ff";
+  const cdGlow=isRedCD?"rgba(255,34,68,0.9)":"rgba(68,136,255,0.9)";
+  const cdBg=isRedCD?"radial-gradient(ellipse 100% 100% at 50% 50%,#2a0008,#0a0000,#000)":"radial-gradient(ellipse 100% 100% at 50% 50%,#000820,#000510,#000)";
+  const cs=rankNum===1?{bg:"linear-gradient(135deg,#ff0080,#ff8800,#ffff00,#00ff80,#0080ff,#8800ff,#ff0080)",border:"#fff",glow:"rgba(255,255,255,0.95)",label:"1等",shimmer:true,rainbow:true}
+    :rankNum===2?{bg:"linear-gradient(135deg,#2a1800,#ffd700,#fff8c0,#ffcc00,#ffd700,#2a1800)",border:"#ffd700",glow:"rgba(255,215,0,0.95)",label:"2等",shimmer:true,rainbow:false}
+    :rankNum===3?{bg:"linear-gradient(135deg,#3a0010,#ff2244,#ff99bb,#ff2244,#3a0010)",border:"#ff2244",glow:"rgba(255,34,68,0.8)",label:"3等",shimmer:true,rainbow:false}
     :rankNum===4?{bg:"linear-gradient(135deg,#001040,#2266ff,#88aaff,#2266ff,#001040)",border:"#2266ff",glow:"rgba(34,102,255,0.6)",label:"4等",shimmer:false,rainbow:false}
-    :{bg:"linear-gradient(135deg,#111,#444,#888,#444,#111)",border:"#555",glow:"rgba(100,100,100,0.3)",label:"ハズレ",shimmer:false,rainbow:false};
+    :{bg:"linear-gradient(135deg,#111,#333,#555,#333,#111)",border:"#666",glow:"rgba(100,100,100,0.3)",label:"ハズレ",shimmer:false,rainbow:false};
 
   const [phase,setPhase]=useState("countdown");
   const [count,setCount]=useState(3);
   const [revealed,setRevealed]=useState(!isPuchun);
-  const [tilt,setTilt]=useState({x:0,y:0});
-  const cardRef=useRef(null);
+  const [cardFlip,setCardFlip]=useState(false);
   const timers=useRef([]);
 
-  const skip=()=>{timers.current.forEach(clearTimeout);setPhase("done");};
+  const skip=()=>{timers.current.forEach(clearTimeout);setPhase("done");setRevealed(true);};
 
   useEffect(()=>{
     if(isPuchun){
       const r=Math.random();
       const cutAt=r<0.2?3:r<0.8?2:1;
       const starts={3:0,2:3000,1:6000};
-      const delay=starts[cutAt]+1000+Math.random()*1500;
+      const delay=starts[cutAt]+800+Math.random()*1200;
       const ts=[];
       if(cutAt<=2)ts.push(setTimeout(()=>setCount(2),3000));
       if(cutAt<=1)ts.push(setTimeout(()=>setCount(1),6000));
       ts.push(setTimeout(()=>setPhase("puchun_cut"),delay));
-      ts.push(setTimeout(()=>setPhase("puchun_slam"),delay+600));
-      ts.push(setTimeout(()=>setPhase("done"),delay+2800));
+      ts.push(setTimeout(()=>{setPhase("puchun_slam");setCardFlip(true);},delay+500));
+      ts.push(setTimeout(()=>setPhase("done"),delay+2500));
       timers.current=ts;
     }else{
       const ts=[
         setTimeout(()=>setCount(2),3000),
         setTimeout(()=>setCount(1),6000),
         setTimeout(()=>setPhase("flash"),9000),
-        setTimeout(()=>setPhase("card"),9350),
-        setTimeout(()=>setPhase("done"),10100),
+        setTimeout(()=>{setPhase("card");setCardFlip(true);},9300),
+        setTimeout(()=>setPhase("done"),10000),
       ];
       timers.current=ts;
     }
     return()=>timers.current.forEach(clearTimeout);
   },[]);
 
-  const pts=useMemo(()=>[...Array(rankNum>=1&&rankNum<=3?40:0)].map((_,i)=>({id:i,x:Math.random()*100,y:50+Math.random()*50,size:2+Math.random()*5,dur:1.2+Math.random()*2,delay:Math.random()*1.5})),[rankNum]);
-  const stars=useMemo(()=>[...Array(rankNum<=2?20:0)].map((_,i)=>({id:i,x:5+Math.random()*90,y:5+Math.random()*90,s:10+Math.random()*14,dur:0.8+Math.random()*1.2,delay:Math.random()*2})),[rankNum]);
+  const pts=useMemo(()=>[...Array(rankNum>=1&&rankNum<=3?60:0)].map((_,i)=>({id:i,x:Math.random()*100,y:Math.random()*100,size:2+Math.random()*6,dur:1+Math.random()*2,delay:Math.random()*2,hue:Math.floor(Math.random()*360)})),[rankNum]);
+  const rays=useMemo(()=>[...Array(rankNum<=2?16:rankNum===3?8:0)].map((_,i)=>({id:i,angle:i*(rankNum<=2?22.5:45),dur:2+Math.random()})),[rankNum]);
 
   return(
-    <div style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",background:phase==="flash"?"#fff":phase==="countdown"?cdBg:phase==="puchun_cut"?"#fff":"rgba(4,4,14,0.99)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"background 0.4s"}}>
+    <div onClick={phase==="done"?undefined:skip} style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",
+      background:phase==="flash"?"#fff":phase==="countdown"?cdBg:phase==="puchun_cut"?"#fff":`radial-gradient(ellipse 100% 100% at 50% 50%,${cs.glow.replace(')',',0.08)')},#000)`,
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:phase==="done"?"default":"pointer"}}>
       <style>{`
-        @keyframes cd-pop{0%{transform:scale(2.5);opacity:0;filter:blur(12px)}40%{transform:scale(0.88);opacity:1;filter:blur(0)}100%{transform:scale(1);opacity:1}}
-        @keyframes cd-ring{0%{transform:scale(0.4);opacity:1}100%{transform:scale(2.4);opacity:0}}
-        @keyframes gp{0%,100%{opacity:0.55;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
-        @keyframes cdrop{0%{transform:translateY(-120px) scale(0.7) rotateX(40deg);opacity:0}60%{transform:translateY(12px) scale(1.04) rotateX(-4deg);opacity:1}80%{transform:translateY(-6px) scale(0.98)}100%{transform:translateY(0) scale(1) rotateX(0);opacity:1}}
-        @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-        @keyframes rpop{0%{transform:scale(0) rotate(-8deg);opacity:0}60%{transform:scale(1.2) rotate(2deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
-        @keyframes rainbow{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+        @keyframes cd-pop{0%{transform:scale(3) rotate(-5deg);opacity:0;filter:blur(20px)}50%{transform:scale(0.85) rotate(2deg);opacity:1;filter:blur(0)}100%{transform:scale(1) rotate(0);opacity:1}}
+        @keyframes cd-ring{0%{transform:scale(0.3);opacity:1;border-width:6px}100%{transform:scale(2.8);opacity:0;border-width:1px}}
+        @keyframes cd-ring2{0%{transform:scale(0.5);opacity:0.8}100%{transform:scale(3.5);opacity:0}}
+        @keyframes gp{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}
+        @keyframes gp2{0%,100%{opacity:0.2;transform:scale(0.9) rotate(0deg)}50%{opacity:0.6;transform:scale(1.2) rotate(180deg)}}
+        @keyframes cdrop{0%{transform:translateY(-150px) scale(0.6) rotateY(90deg);opacity:0}55%{transform:translateY(15px) scale(1.05) rotateY(-5deg);opacity:1}80%{transform:translateY(-5px) scale(0.98) rotateY(2deg)}100%{transform:translateY(0) scale(1) rotateY(0);opacity:1}}
+        @keyframes float{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-14px) rotate(1deg)}}
+        @keyframes rpop{0%{transform:scale(0) rotate(-12deg);opacity:0}55%{transform:scale(1.25) rotate(3deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
+        @keyframes rainbow{0%{filter:hue-rotate(0deg) brightness(1.1)}100%{filter:hue-rotate(360deg) brightness(1.1)}}
         @keyframes shim{0%{background-position:200% center}100%{background-position:-200% center}}
-        @keyframes pup{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-200px) scale(0);opacity:0}}
-        @keyframes stw{0%,100%{opacity:0;transform:scale(0)}50%{opacity:1;transform:scale(1)}}
-        @keyframes pcup{0%{transform:translateY(110%) scale(0.85);opacity:0}55%{transform:translateY(-8%) scale(1.03);opacity:1}75%{transform:translateY(3%) scale(0.98)}100%{transform:translateY(0) scale(1);opacity:1}}
-        @keyframes spline{0%{transform:scaleX(0);opacity:1}100%{transform:scaleX(1);opacity:0}}
-        @keyframes shake{0%,100%{transform:translate(0,0)}10%{transform:translate(-14px,-6px)}25%{transform:translate(12px,8px)}40%{transform:translate(-9px,-10px)}55%{transform:translate(10px,6px)}70%{transform:translate(-6px,-4px)}}
-        @keyframes pglow{0%{transform:scale(0.3);opacity:1}100%{transform:scale(3);opacity:0}}
-        @keyframes halo{0%{transform:scale(1);opacity:0.7}100%{transform:scale(2.2);opacity:0}}
-        @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+        @keyframes pup{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-250px) scale(0) rotate(180deg);opacity:0}}
+        @keyframes stw{0%,100%{opacity:0;transform:scale(0) rotate(-30deg)}50%{opacity:1;transform:scale(1) rotate(0deg)}}
+        @keyframes pcup{0%{transform:translateY(120%) scale(0.8) rotateX(20deg);opacity:0}50%{transform:translateY(-10%) scale(1.06) rotateX(-3deg);opacity:1}70%{transform:translateY(4%) scale(0.97)}100%{transform:translateY(0) scale(1) rotateX(0);opacity:1}}
+        @keyframes spline{0%{transform:scaleX(0) skewY(2deg);opacity:1}100%{transform:scaleX(1.2) skewY(0deg);opacity:0}}
+        @keyframes shake{0%,100%{transform:translate(0,0) rotate(0deg)}10%{transform:translate(-18px,-8px) rotate(-1deg)}25%{transform:translate(15px,10px) rotate(1deg)}40%{transform:translate(-12px,-12px) rotate(-0.5deg)}55%{transform:translate(13px,7px) rotate(0.5deg)}70%{transform:translate(-8px,-5px) rotate(-0.3deg)}}
+        @keyframes pglow{0%{transform:scale(0.2);opacity:1}100%{transform:scale(4);opacity:0}}
+        @keyframes pglow2{0%{transform:scale(0.4);opacity:0.7}100%{transform:scale(3.5);opacity:0}}
+        @keyframes ray{0%{transform:scaleY(0);opacity:0.8}100%{transform:scaleY(1);opacity:0}}
+        @keyframes halo{0%{transform:scale(1);opacity:0.8}100%{transform:scale(2.5);opacity:0}}
+        @keyframes cardglow{0%,100%{box-shadow:0 0 40px var(--cg),0 0 80px var(--cg)}50%{box-shadow:0 0 80px var(--cg),0 0 160px var(--cg),0 0 240px var(--cg)}}
+        @keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100%)}}
+        @keyframes appear{0%{opacity:0;transform:scale(0.8) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+        @keyframes textglow{0%,100%{text-shadow:0 0 20px currentColor}50%{text-shadow:0 0 40px currentColor,0 0 80px currentColor}}
       `}</style>
 
+      {/* カウントダウン */}
       {phase==="countdown"&&(
         <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:"100%"}}>
-          <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${cdColor}22,transparent 70%)`,animation:"gp 0.9s ease-in-out infinite",pointerEvents:"none"}}/>
-          {[0,0.3,0.6].map((d,i)=><div key={i} style={{position:"absolute",width:260,height:260,borderRadius:"50%",border:`3px solid ${cdColor}`,animation:`cd-ring 1s ease-out ${d}s infinite`,pointerEvents:"none"}}/>)}
-          <button onClick={skip} style={{position:"absolute",bottom:36,right:36,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",padding:"8px 22px",borderRadius:30,fontSize:12,cursor:"pointer",zIndex:10,fontFamily:"'Noto Sans JP',sans-serif"}}>スキップ →</button>
-          <div key={count} style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:220,lineHeight:1,color:cdColor,textShadow:`0 0 60px ${cdGlow},0 0 120px ${cdGlow}`,animation:"cd-pop 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both",userSelect:"none",zIndex:2}}>{count}</div>
+          {/* 外側の光球 */}
+          <div style={{position:"absolute",width:"70vw",height:"70vw",borderRadius:"50%",background:`radial-gradient(circle,${cdColor}15,transparent 70%)`,animation:"gp 1.2s ease-in-out infinite"}}/>
+          <div style={{position:"absolute",width:"50vw",height:"50vw",borderRadius:"50%",background:`radial-gradient(circle,${cdColor}25,transparent 60%)`,animation:"gp2 1.8s ease-in-out infinite"}}/>
+          {/* 波紋 */}
+          {[0,0.25,0.5,0.75].map((d,i)=>(
+            <div key={i} style={{position:"absolute",width:"40vw",height:"40vw",borderRadius:"50%",border:`${4-i}px solid ${cdColor}`,animation:`cd-ring ${1.2}s ease-out ${d}s infinite`}}/>
+          ))}
+          {[0,0.4].map((d,i)=>(
+            <div key={i} style={{position:"absolute",width:"60vw",height:"60vw",borderRadius:"50%",border:`2px solid ${cdColor}55`,animation:`cd-ring2 1.6s ease-out ${d}s infinite`}}/>
+          ))}
+          {/* スキップボタン */}
+          <button onClick={(e)=>{e.stopPropagation();skip();}} style={{position:"absolute",bottom:44,right:44,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",padding:"10px 28px",borderRadius:30,fontSize:13,cursor:"pointer",zIndex:10,fontFamily:"'Noto Sans JP',sans-serif",backdropFilter:"blur(4px)"}}>SKIP →</button>
+          {/* 数字 */}
+          <div key={count} style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:"28vw",lineHeight:1,color:cdColor,
+            textShadow:`0 0 40px ${cdGlow},0 0 80px ${cdGlow},0 0 160px ${cdGlow}`,
+            animation:"cd-pop 0.6s cubic-bezier(0.175,0.885,0.32,1.275) both",userSelect:"none",zIndex:2}}>{count}</div>
+          {/* レア判定テキスト */}
+          {isPuchun&&<div style={{position:"absolute",top:"15%",left:"50%",transform:"translateX(-50%)",fontFamily:"'Cinzel',serif",fontSize:"4vw",color:cdColor,textShadow:`0 0 20px ${cdGlow}`,animation:"textglow 1s ease-in-out infinite",letterSpacing:"0.3em",whiteSpace:"nowrap"}}>
+            {rankNum===1?"★ SPECIAL ★":rankNum===2?"◆ RARE ◆":"▲ HIT ▲"}
+          </div>}
         </div>
       )}
 
-      {phase==="flash"&&<div style={{fontSize:80}}>✨</div>}
+      {/* フラッシュ */}
+      {phase==="flash"&&<div style={{position:"absolute",inset:0,background:"radial-gradient(circle,#fff,#ffffee)"}}/>}
 
-      {phase==="puchun_cut"&&<div style={{position:"absolute",inset:0,background:"#fff"}}/>}
+      {/* プチュン演出 カット */}
+      {phase==="puchun_cut"&&<div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,#fff,#fffff0)"}}/>}
 
+      {/* プチュン演出 スラム */}
       {phase==="puchun_slam"&&(
-        <div style={{position:"absolute",inset:0,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",animation:"shake 0.5s ease-out both",overflow:"hidden"}}>
-          {[...Array(24)].map((_,i)=><div key={i} style={{position:"absolute",left:"50%",top:"50%",width:"60vw",height:i%3===0?4:i%3===1?2:1,background:`linear-gradient(90deg,transparent,${cs.border}cc,${cs.border})`,transformOrigin:"left center",transform:`rotate(${i*15}deg)`,animation:`spline 0.35s ease-out ${i*0.005}s both`}}/>)}
-          <div style={{position:"absolute",width:"80vw",height:"80vw",borderRadius:"50%",background:`radial-gradient(circle,${cs.glow},transparent 65%)`,animation:"pglow 0.5s ease-out both",pointerEvents:"none"}}/>
-          <div style={{width:"min(68vw,340px)",height:"min(95vw,476px)",borderRadius:20,background:cs.bg,border:`4px solid ${cs.border}`,boxShadow:`0 0 60px ${cs.glow},0 0 120px ${cs.glow}`,animation:"pcup 0.55s cubic-bezier(0.22,1,0.36,1) both",position:"relative",overflow:"hidden",zIndex:10}}>
-            {cs.shimmer&&<div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,transparent 20%,rgba(255,255,255,0.3) 40%,rgba(255,255,255,0.08) 58%,transparent 75%)",backgroundSize:"300% 300%",animation:cs.rainbow?"rainbow 1.5s linear infinite,shim 2s linear infinite":"shim 2s linear infinite"}}/>}
-            <div style={{position:"absolute",top:0,left:0,right:0,height:"35%",background:"linear-gradient(180deg,rgba(255,255,255,0.15),transparent)",borderRadius:"18px 18px 0 0"}}/>
+        <div style={{position:"absolute",inset:0,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",animation:"shake 0.6s ease-out both",overflow:"hidden"}}>
+          {/* 光線 */}
+          {rays.map(r=>(
+            <div key={r.id} style={{position:"absolute",left:"50%",top:"50%",width:"3px",height:"60vh",
+              background:`linear-gradient(180deg,transparent,${cs.border},${cs.border}88,transparent)`,
+              transformOrigin:"50% 100%",transform:`rotate(${r.angle}deg) translateX(-50%)`,
+              animation:`ray ${r.dur}s ease-out 0.1s both`}}/>
+          ))}
+          {/* グロー */}
+          <div style={{position:"absolute",width:"80vw",height:"80vw",borderRadius:"50%",background:`radial-gradient(circle,${cs.glow},transparent 60%)`,animation:"pglow 0.6s ease-out both"}}/>
+          <div style={{position:"absolute",width:"60vw",height:"60vw",borderRadius:"50%",background:`radial-gradient(circle,${cs.glow},transparent 55%)`,animation:"pglow2 0.8s ease-out 0.1s both"}}/>
+          {/* カード */}
+          <div style={{"--cg":cs.glow,width:"min(65vw,320px)",height:"min(90vw,449px)",borderRadius:18,background:cs.bg,
+            border:`5px solid ${cs.border}`,
+            animation:`pcup 0.6s cubic-bezier(0.22,1,0.36,1) both,cardglow 1.5s ease-in-out 0.6s infinite`,
+            position:"relative",overflow:"hidden",zIndex:10}}>
+            {cs.shimmer&&<div style={{position:"absolute",inset:0,background:"linear-gradient(125deg,transparent 15%,rgba(255,255,255,0.4) 35%,rgba(255,255,255,0.1) 55%,transparent 70%)",backgroundSize:"300% 300%",animation:"shim 1.8s linear infinite"}}/>}
+            {cs.rainbow&&<div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,rgba(255,0,128,0.3),rgba(255,136,0,0.3),rgba(255,255,0,0.3),rgba(0,255,128,0.3),rgba(0,128,255,0.3),rgba(136,0,255,0.3))",animation:"rainbow 2s linear infinite"}}/>}
+            {card.isReal&&card.img?<img src={card.img} alt={card.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              :<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:72}}>{card.image||"🎴"}</div>}
+            {/* スキャンライン */}
+            <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,transparent 40%,rgba(255,255,255,0.08) 50%,transparent 60%)",animation:"scanline 2s linear infinite",pointerEvents:"none"}}/>
           </div>
         </div>
       )}
 
+      {/* カード表示フェーズ */}
       {(phase==="card"||phase==="done")&&(
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",position:"relative",width:"100%"}}>
-          <div style={{position:"absolute",inset:0,pointerEvents:"none",background:`radial-gradient(ellipse 60% 55% at 50% 42%,${cs.glow},transparent 65%)`,animation:"gp 2s ease-in-out infinite"}}/>
-          {rankNum===1&&<div style={{position:"absolute",inset:0,pointerEvents:"none",background:"linear-gradient(135deg,#ff000033,#ff880022,#ffff0022,#00ff8822,#0088ff22,#8800ff22)",animation:"rainbow 2.5s linear infinite"}}/>}
-          {phase==="done"&&pts.map(p=><div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.size,height:p.size,borderRadius:"50%",background:rankNum===1?`hsl(${p.id*18},100%,65%)`:cs.border,animation:`pup ${p.dur}s ease-out ${p.delay}s infinite`,pointerEvents:"none"}}/>)}
-          {phase==="done"&&stars.map(s=><div key={s.id} style={{position:"absolute",left:`${s.x}%`,top:`${s.y}%`,fontSize:s.s,color:rankNum===1?`hsl(${s.id*18},100%,70%)`:cs.border,animation:`stw ${s.dur}s ease-in-out ${s.delay}s infinite`,pointerEvents:"none"}}>✦</div>)}
-          {phase==="done"&&revealed&&(
-            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontWeight:900,fontSize:rankNum===1?30:rankNum===2?26:22,color:rankNum===1?"#fff":cs.border,textShadow:`0 0 40px ${cs.glow}`,marginBottom:16,letterSpacing:2,position:"relative",zIndex:10,animation:"rpop 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both",background:rankNum===1?"linear-gradient(90deg,#ff4488,#ffd700,#44ff88,#44aaff,#ff4488)":"none",WebkitBackgroundClip:rankNum===1?"text":"unset",WebkitTextFillColor:rankNum===1?"transparent":"unset",backgroundSize:"200% auto"}}>
-              {rankNum===1?"🌈 1等 当選！ 🌈":rankNum===2?"🥇 2等 当選！":rankNum===3?"🎖 3等 当選！":rankNum===4?"4等":"またチャレンジしよう…"}
-            </div>
-          )}
-          <div ref={cardRef} onMouseMove={e=>{if(!cardRef.current||phase!=="done")return;const r=cardRef.current.getBoundingClientRect();setTilt({x:((e.clientY-r.top)/r.height-0.5)*18,y:-((e.clientX-r.left)/r.width-0.5)*18});}} onMouseLeave={()=>setTilt({x:0,y:0})}
-            style={{width:240,height:336,borderRadius:18,position:"relative",overflow:"hidden",background:cs.bg,border:`3px solid ${cs.border}`,boxShadow:phase==="done"?`0 0 80px ${cs.glow},0 0 160px ${cs.glow}55,0 30px 80px rgba(0,0,0,0.95)`:`0 0 40px ${cs.glow}88`,animation:phase==="card"?"cdrop 0.65s cubic-bezier(0.175,0.885,0.32,1.275) both":phase==="done"?"float 3s ease-in-out infinite":"none",transform:phase==="done"?`rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`:undefined,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:10}}>
-            {cs.shimmer&&<div style={{position:"absolute",inset:0,pointerEvents:"none",background:cs.rainbow?"linear-gradient(135deg,transparent 20%,rgba(255,255,255,0.3) 40%,rgba(255,255,255,0.1) 55%,transparent 70%)":"linear-gradient(135deg,transparent 25%,rgba(255,255,255,0.2) 45%,rgba(255,255,255,0.05) 55%,transparent 75%)",backgroundSize:"300% 300%",animation:cs.rainbow?"rainbow 2s linear infinite,shim 2.5s linear infinite":"shim 2.5s linear infinite"}}/>}
-            <div style={{position:"absolute",top:0,left:0,right:0,height:"35%",background:"linear-gradient(180deg,rgba(255,255,255,0.12),transparent)",borderRadius:"16px 16px 0 0",pointerEvents:"none"}}/>
-            {rankNum===1&&phase==="done"&&revealed&&[0,0.4,0.8].map((d,i)=><div key={i} style={{position:"absolute",width:"100%",height:"100%",borderRadius:16,border:"3px solid rgba(255,255,255,0.6)",animation:`halo 1.5s ease-out ${d}s infinite`,pointerEvents:"none"}}/>)}
-            {revealed&&(card.isReal
-              ? <img src={card.img} alt={card.name} style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0,borderRadius:16,zIndex:2}}/>
-              : card.prizeRank==="ハズレ"||(!card.prizeRank&&prize?.rank==="ハズレ")
-                ? <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}>
-                    <NanikaCard size={220} showText={true}/>
-                  </div>
-                : card.prizeRank==="3等"||(!card.prizeRank&&prize?.rank==="3等")
-                ? <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}>
-                    <SantouCard size={220} showText={true}/>
-                  </div>
-                : <>
-                    <div style={{fontSize:90,filter:rankNum<=2?`drop-shadow(0 0 28px ${cs.border}) drop-shadow(0 0 56px ${cs.glow})`:rankNum===3?`drop-shadow(0 0 16px ${cs.border})`:"none",marginBottom:8,zIndex:2}}>{card.image}</div>
-                    <div style={{color:"#fff",fontFamily:"'Noto Sans JP',sans-serif",fontSize:14,fontWeight:700,textAlign:"center",padding:"0 18px",textShadow:"0 2px 16px rgba(0,0,0,0.95)",lineHeight:1.4,zIndex:2}}>{card.name}</div>
-                    <div style={{marginTop:12,zIndex:2,background:"rgba(0,0,0,0.5)",borderRadius:8,padding:"5px 18px",fontFamily:"'Cinzel',serif",fontSize:14,color:cs.border,letterSpacing:4,border:`1px solid ${cs.border}66`}}>{cs.label}</div>
-                  </>
-            )}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",position:"relative",width:"100%",height:"100%",justifyContent:"center"}}>
+          {/* 背景グロー */}
+          <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse 70% 60% at 50% 45%,${cs.glow.replace(')',',0.12)')},transparent 70%)`,animation:"gp 2.5s ease-in-out infinite",pointerEvents:"none"}}/>
+          {/* レインボー背景 */}
+          {rankNum===1&&<div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,rgba(255,0,128,0.06),rgba(255,136,0,0.06),rgba(255,255,0,0.06),rgba(0,255,128,0.06),rgba(0,128,255,0.06),rgba(136,0,255,0.06))",animation:"rainbow 3s linear infinite",pointerEvents:"none"}}/>}
+          {/* 光線（done時） */}
+          {phase==="done"&&rays.map(r=>(
+            <div key={r.id} style={{position:"absolute",left:"50%",top:"50%",width:"2px",height:"50vh",
+              background:`linear-gradient(180deg,transparent,${cs.border}66,transparent)`,
+              transformOrigin:"50% 100%",transform:`rotate(${r.angle}deg) translateX(-50%)`,
+              opacity:0.3}}/>
+          ))}
+          {/* パーティクル */}
+          {phase==="done"&&pts.map(p=>(
+            <div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,
+              width:p.size,height:p.size,borderRadius:"50%",
+              background:rankNum===1?`hsl(${p.hue},100%,65%)`:rankNum===2?`hsl(45,100%,${60+p.id%30}%)`:`hsl(350,100%,65%)`,
+              animation:`pup ${p.dur}s ease-out ${p.delay}s infinite`,pointerEvents:"none",
+              boxShadow:`0 0 ${p.size*2}px currentColor`}}/>
+          ))}
+          {/* ✦スター */}
+          {phase==="done"&&rankNum<=2&&[...Array(16)].map((_,i)=>(
+            <div key={i} style={{position:"absolute",left:`${5+Math.random()*90}%`,top:`${5+Math.random()*90}%`,
+              fontSize:12+Math.random()*16,color:rankNum===1?`hsl(${i*22},100%,70%)`:cs.border,
+              animation:`stw ${0.8+Math.random()*1.2}s ease-in-out ${Math.random()*2}s infinite`,pointerEvents:"none"}}>✦</div>
+          ))}
+
+          {/* カード本体 */}
+          <div style={{"--cg":cs.glow,width:"min(62vw,300px)",height:"min(86vw,416px)",borderRadius:16,background:cs.bg,
+            border:`4px solid ${cs.border}`,
+            boxShadow:`0 0 40px ${cs.glow},0 0 80px ${cs.glow}`,
+            animation:phase==="card"?`cdrop 0.7s cubic-bezier(0.22,1,0.36,1) both`:`float 3s ease-in-out infinite`,
+            position:"relative",overflow:"hidden",zIndex:5}}>
+            {cs.shimmer&&<div style={{position:"absolute",inset:0,background:"linear-gradient(125deg,transparent 20%,rgba(255,255,255,0.35) 40%,rgba(255,255,255,0.08) 58%,transparent 75%)",backgroundSize:"300% 300%",animation:"shim 2s linear infinite",zIndex:2}}/>}
+            {cs.rainbow&&<div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,rgba(255,0,128,0.25),rgba(255,136,0,0.25),rgba(255,255,0,0.25),rgba(0,255,128,0.25),rgba(0,128,255,0.25),rgba(136,0,255,0.25))",animation:"rainbow 2s linear infinite",zIndex:2}}/>}
+            {card.isReal&&card.img?<img src={card.img} alt={card.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              :<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:64}}>{card.image||"🎴"}</div>}
           </div>
-          {phase==="done"&&(
-            <div style={{textAlign:"center",marginTop:20,zIndex:10}}>
-              <div style={{color:"#444",fontSize:11,marginBottom:4}}>{card.name} [{card.rarity}]</div>
-              {revealed
-                ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,marginTop:8}}>
-                  <button onClick={onClose} style={{background:"transparent",border:`1px solid ${cs.border}55`,color:cs.border,padding:"11px 56px",borderRadius:40,fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:4,cursor:"pointer"}} onMouseEnter={e=>e.target.style.background=`${cs.border}18`} onMouseLeave={e=>e.target.style.background="transparent"}>CLOSE</button>
-                  {onRedeem&&<button onClick={()=>onRedeem(card)} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"10px 32px",borderRadius:40,fontSize:13,fontWeight:900,cursor:"pointer"}}>🪙 コインに還元</button>}
-                </div>
-                :<button onClick={()=>onConfirm?onConfirm():onClose()} style={{marginTop:8,background:cs.border,border:"none",color:"#000",padding:"14px 48px",borderRadius:40,fontFamily:"'Noto Sans JP',sans-serif",fontSize:14,fontWeight:900,cursor:"pointer"}} onMouseEnter={e=>e.target.style.opacity="0.85"} onMouseLeave={e=>e.target.style.opacity="1"}>カードを確認する →</button>
-              }
+
+          {/* カード名・等級 */}
+          {phase==="done"&&revealed&&(
+            <div style={{marginTop:20,textAlign:"center",animation:"appear 0.4s ease-out both",position:"relative",zIndex:6}}>
+              {effectiveRank&&effectiveRank!=="ハズレ"&&<div style={{
+                display:"inline-block",background:cs.bg,border:`2px solid ${cs.border}`,
+                borderRadius:20,padding:"4px 20px",color:rankNum===1?"#000":cs.border,
+                fontWeight:900,fontSize:14,marginBottom:8,
+                boxShadow:`0 0 20px ${cs.glow}`,animation:"textglow 1.5s ease-in-out infinite"}}>
+                {cs.label}
+              </div>}
+              <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontWeight:900,
+                fontSize:rankNum===1?26:rankNum===2?22:18,
+                color:"#fff",textShadow:`0 0 20px ${cs.glow}`,
+                marginBottom:16,padding:"0 20px"}}>
+                {card.name||"???"}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                {revealed
+                  ?<div style={{display:"flex",gap:12}}>
+                    <button onClick={(e)=>{e.stopPropagation();onClose&&onClose();}} style={{
+                      background:"transparent",border:`1px solid ${cs.border}55`,color:cs.border,
+                      padding:"11px 44px",borderRadius:40,fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:4,cursor:"pointer"}}
+                      onMouseEnter={e=>e.target.style.background=`${cs.border}18`}
+                      onMouseLeave={e=>e.target.style.background="transparent"}>CLOSE</button>
+                  </div>
+                  :<button onClick={(e)=>{e.stopPropagation();onConfirm?onConfirm():onClose();}} style={{
+                    background:cs.border,border:"none",color:"#000",
+                    padding:"14px 48px",borderRadius:40,fontFamily:"'Noto Sans JP',sans-serif",
+                    fontSize:14,fontWeight:900,cursor:"pointer"}}>カードを確認する →</button>
+                }
+              </div>
             </div>
           )}
         </div>
       )}
     </div>
   );
-}
-
 // ===== MultiReveal =====
 function MultiReveal({cards,pack,onClose,onRedeem,onShip}){
   const [shown,setShown]=useState(0);
