@@ -1885,7 +1885,7 @@ export default function App(){
   const [user,setUser]=useState(null);
   useEffect(()=>{
     const unsub=auth.onAuthStateChanged(u=>{
-      if(u)setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified});
+     if(u)setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified});
       else setUser(null);
     });
     return()=>unsub();
