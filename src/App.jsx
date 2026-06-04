@@ -761,10 +761,12 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
   const handlePay=(method)=>{
     const proceed=async()=>{
       try{
+        const idToken=auth.currentUser?await auth.currentUser.getIdToken():null;
+        if(!idToken){alert("ログインが必要です");return;}
         const res=await fetch("/api/create-checkout",{
           method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({amount:modal.price,coins:modal.coins,userId:userId||"guest"})
+          body:JSON.stringify({coins:modal.coins,discount:discount||0,idToken})
         });
         const data=await res.json();
         if(data.url){window.location.href=data.url;}
@@ -1892,17 +1894,10 @@ export default function App(){
   },[]);
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
-    const coinsParam=params.get("coins");
-    const userIdParam=params.get("userId");
-    if(coinsParam&&userIdParam){
-      const amount=parseInt(coinsParam);
+    // コイン付与はサーバー(Stripe Webhook)で行う。ここでは付与せず、決済完了の表示だけ行う
+    if(params.get("purchase")==="success"){
       window.history.replaceState({},"","/");
-      const ref=doc(db,"users",userIdParam);
-      getDoc(ref).then(d=>{
-        const current=d.exists()?d.data().coins||0:0;
-        const currentIssued=d.exists()?d.data().totalIssued||0:0;
-        setDoc(ref,{coins:current+amount,totalIssued:currentIssued+amount},{merge:true});
-      });
+      setTimeout(()=>alert("ご購入ありがとうございます！コインの反映まで少し時間がかかる場合があります。"),300);
     }
   },[]);
   const [ageConfirmed,setAgeConfirmed]=usePersistedState("ageConfirmed",false);
