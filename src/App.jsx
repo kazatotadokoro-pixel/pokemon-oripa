@@ -129,10 +129,6 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const effectiveRank=card.prizeRank||(prize?.rank);
   const rankNum=effectiveRank==="1等"?1:effectiveRank==="2等"?2:effectiveRank==="3等"?3:effectiveRank==="ハズレ"?0:4;
   const isPuchun=rankNum>=1&&rankNum<=3;
-  const isRedCD=rankNum>=1&&rankNum<=3;
-  const cdColor=isRedCD?"#ff2244":"#2266ff";
-  const cdGlow=isRedCD?"rgba(255,34,68,0.8)":"rgba(34,102,255,0.8)";
-  const cdBg=isRedCD?"radial-gradient(ellipse 80% 80% at 50% 50%,#3a0010,#000)":"radial-gradient(ellipse 80% 80% at 50% 50%,#00103a,#000)";
   const cs=rankNum===1?{bg:"linear-gradient(135deg,#ff0080,#ff8800,#ffff00,#00ff80,#0080ff,#8800ff,#ff0080)",border:"#fff",glow:"rgba(255,255,255,0.9)",label:"1等",shimmer:true,rainbow:true}
     :rankNum===2?{bg:"linear-gradient(135deg,#3a2200,#ffd700,#fff0a0,#ffb800,#ffd700,#3a2200)",border:"#ffd700",glow:"rgba(255,215,0,0.9)",label:"2等",shimmer:true,rainbow:false}
     :rankNum===3?{bg:"linear-gradient(135deg,#4a0010,#ff2244,#ff88aa,#ff2244,#4a0010)",border:"#ff2244",glow:"rgba(255,34,68,0.7)",label:"3等",shimmer:true,rainbow:false}
@@ -143,12 +139,46 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const [count,setCount]=useState(3);
   const [revealed,setRevealed]=useState(!isPuchun);
   const [tilt,setTilt]=useState({x:0,y:0});
+  // オーラ昇格演出: 期待度を色で段階表現する(青→緑→赤→金→虹)
+  // rankNumが高い当たりほど、最終的に上位の色まで昇格する
+  const auraTarget=rankNum===1?5:rankNum===2?4:rankNum===3?3:rankNum===4?2:1;
+  const [auraLevel,setAuraLevel]=useState(1);
+  const [chance,setChance]=useState(false); // チャンス予告(激アツサイン)
+  const [promote,setPromote]=useState(false); // 昇格の瞬間フラッシュ
   const cardRef=useRef(null);
   const timers=useRef([]);
+  const AURA=[null,
+    {c:"#2266ff",g:"rgba(34,102,255,0.7)",name:"青"},
+    {c:"#22cc66",g:"rgba(34,204,102,0.7)",name:"緑"},
+    {c:"#ff2244",g:"rgba(255,34,68,0.8)",name:"赤"},
+    {c:"#ffd700",g:"rgba(255,215,0,0.9)",name:"金"},
+    {c:"#ff66cc",g:"rgba(255,102,204,0.95)",name:"虹",rainbow:true},
+  ];
+  const aura=AURA[auraLevel];
 
   const skip=()=>{timers.current.forEach(clearTimeout);setPhase("done");};
 
   useEffect(()=>{
+    // オーラ昇格: カウントダウンの進行に合わせて、目標レベルまで段階的に色を上げる
+    // 各昇格時に画面を一瞬フラッシュさせて「昇格した!」という驚きを作る
+    const auraTimers=[];
+    for(let lv=2;lv<=auraTarget;lv++){
+      const t=1200+(lv-1)*1700+Math.random()*400;
+      auraTimers.push(setTimeout(()=>{
+        setAuraLevel(lv);
+        setPromote(true);
+        setTimeout(()=>setPromote(false),420);
+      },t));
+    }
+    // チャンス予告: 高レア(2等以上)のとき、確率で激アツサインを表示
+    if(auraTarget>=4&&Math.random()<0.75){
+      auraTimers.push(setTimeout(()=>{
+        setChance(true);
+        setTimeout(()=>setChance(false),1600);
+      },2200));
+    }
+    timers.current.push(...auraTimers);
+
     if(isPuchun){
       const r=Math.random();
       const cutAt=r<0.2?3:r<0.8?2:1;
@@ -160,7 +190,7 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
       ts.push(setTimeout(()=>setPhase("puchun_cut"),delay));
       ts.push(setTimeout(()=>setPhase("puchun_slam"),delay+600));
       ts.push(setTimeout(()=>setPhase("done"),delay+2800));
-      timers.current=ts;
+      timers.current.push(...ts);
     }else{
       const ts=[
         setTimeout(()=>setCount(2),3000),
@@ -169,7 +199,7 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
         setTimeout(()=>setPhase("card"),9350),
         setTimeout(()=>setPhase("done"),10100),
       ];
-      timers.current=ts;
+      timers.current.push(...ts);
     }
     return()=>timers.current.forEach(clearTimeout);
   },[]);
@@ -178,7 +208,7 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const stars=useMemo(()=>[...Array(rankNum<=2?20:0)].map((_,i)=>({id:i,x:5+Math.random()*90,y:5+Math.random()*90,s:10+Math.random()*14,dur:0.8+Math.random()*1.2,delay:Math.random()*2})),[rankNum]);
 
   return(
-    <div style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",background:phase==="flash"?"#fff":phase==="countdown"?cdBg:phase==="puchun_cut"?"#fff":"rgba(4,4,14,0.99)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"background 0.4s"}}>
+    <div style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",background:phase==="flash"?"#fff":phase==="countdown"?`radial-gradient(ellipse 80% 80% at 50% 60%,${aura.c}22,#000)`:phase==="puchun_cut"?"#fff":"rgba(4,4,14,0.99)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"background 0.5s"}}>
       <style>{`
         @keyframes cd-pop{0%{transform:scale(2.5);opacity:0;filter:blur(12px)}40%{transform:scale(0.88);opacity:1;filter:blur(0)}100%{transform:scale(1);opacity:1}}
         @keyframes cd-ring{0%{transform:scale(0.4);opacity:1}100%{transform:scale(2.4);opacity:0}}
@@ -196,14 +226,28 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
         @keyframes pglow{0%{transform:scale(0.3);opacity:1}100%{transform:scale(3);opacity:0}}
         @keyframes halo{0%{transform:scale(1);opacity:0.7}100%{transform:scale(2.2);opacity:0}}
         @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+        @keyframes promoflash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+        @keyframes chancein{0%{transform:translateX(-50%) scale(0) rotate(-10deg);opacity:0}60%{transform:translateX(-50%) scale(1.25) rotate(3deg);opacity:1}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
       `}</style>
 
       {phase==="countdown"&&(
         <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:"100%"}}>
-          <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${cdColor}22,transparent 70%)`,animation:"gp 0.9s ease-in-out infinite",pointerEvents:"none"}}/>
-          {[0,0.3,0.6].map((d,i)=><div key={i} style={{position:"absolute",width:260,height:260,borderRadius:"50%",border:`3px solid ${cdColor}`,animation:`cd-ring 1s ease-out ${d}s infinite`,pointerEvents:"none"}}/>)}
+          {/* 画面下から立ち上るオーラ(色=期待度) */}
+          <div style={{position:"absolute",bottom:0,left:0,right:0,height:"70%",background:`linear-gradient(0deg,${aura.c}55,${aura.c}22 40%,transparent)`,animation:aura.rainbow?"rainbow 1.5s linear infinite":"none",pointerEvents:"none",transition:"background 0.5s"}}/>
+          {/* 立ち上る光の粒 */}
+          {[...Array(auraLevel*5)].map((_,i)=><div key={i} style={{position:"absolute",bottom:0,left:`${(i*7+10)%90+5}%`,width:3+Math.random()*4,height:3+Math.random()*4,borderRadius:"50%",background:aura.rainbow?`hsl(${i*30},100%,65%)`:aura.c,boxShadow:`0 0 8px ${aura.g}`,animation:`pup ${1.2+Math.random()*1.5}s ease-out ${Math.random()*1.5}s infinite`,pointerEvents:"none"}}/>)}
+          <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${aura.c}33,transparent 70%)`,animation:"gp 0.9s ease-in-out infinite",pointerEvents:"none",transition:"background 0.5s"}}/>
+          {[0,0.3,0.6].map((d,i)=><div key={i} style={{position:"absolute",width:260,height:260,borderRadius:"50%",border:`3px solid ${aura.c}`,animation:`cd-ring 1s ease-out ${d}s infinite`,pointerEvents:"none",transition:"border-color 0.5s"}}/>)}
+          {/* 昇格の瞬間の白フラッシュ */}
+          {promote&&<div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.55)",animation:"promoflash 0.42s ease-out both",pointerEvents:"none",zIndex:5}}/>}
+          {/* チャンス予告(激アツサイン) */}
+          {chance&&(
+            <div style={{position:"absolute",top:"22%",left:"50%",transform:"translateX(-50%)",zIndex:8,animation:"chancein 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both",pointerEvents:"none"}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:46,color:"#ffd700",textShadow:"0 0 30px rgba(255,215,0,1),0 0 60px rgba(255,140,0,0.8)",letterSpacing:4,whiteSpace:"nowrap"}}>★ CHANCE ★</div>
+            </div>
+          )}
           <button onClick={skip} style={{position:"absolute",bottom:36,right:36,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",padding:"8px 22px",borderRadius:30,fontSize:12,cursor:"pointer",zIndex:10,fontFamily:"'Noto Sans JP',sans-serif"}}>スキップ →</button>
-          <div key={count} style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:220,lineHeight:1,color:cdColor,textShadow:`0 0 60px ${cdGlow},0 0 120px ${cdGlow}`,animation:"cd-pop 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both",userSelect:"none",zIndex:2}}>{count}</div>
+          <div key={count} style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:220,lineHeight:1,color:aura.c,textShadow:`0 0 60px ${aura.g},0 0 120px ${aura.g}`,animation:"cd-pop 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both",userSelect:"none",zIndex:2,transition:"color 0.5s"}}>{count}</div>
         </div>
       )}
 
