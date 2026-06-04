@@ -1712,7 +1712,7 @@ function AuthScreen({onLogin}){
     if(!email||!pass){setErr("メールアドレスとパスワードを入力してください");return;}
     setLoading(true);
     signInWithEmailAndPassword(auth,email,pass)
-      .then(cred=>{onLogin({name:cred.user.displayName||email,email:cred.user.email,id:cred.user.uid});})
+      .then(cred=>{onLogin({name:cred.user.displayName||email,email:cred.user.email,id:cred.user.uid,emailVerified:cred.user.emailVerified});})
       .catch(e=>{setErr("メールアドレスまたはパスワードが違います");})
       .finally(()=>setLoading(false));
   };
@@ -1726,7 +1726,7 @@ function AuthScreen({onLogin}){
       .then(cred=>{
         setDoc(doc(db,"users",cred.user.uid),{name,email,coins:1250,createdAt:new Date().toISOString()});
         sendEmailVerification(cred.user).then(()=>alert("確認メールを送信しました。メールのリンクから認証を完了してください。")).catch(()=>{});
-        onLogin({name,email:cred.user.email,id:cred.user.uid});
+        onLogin({name,email:cred.user.email,id:cred.user.uid,emailVerified:cred.user.emailVerified});
       })
       .catch(e=>{setErr("このメールアドレスはすでに使われています");})
       .finally(()=>setLoading(false));
@@ -1885,7 +1885,7 @@ export default function App(){
   const [user,setUser]=useState(null);
   useEffect(()=>{
     const unsub=auth.onAuthStateChanged(u=>{
-      if(u)setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified});
+     if(u)setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified});
       else setUser(null);
     });
     return()=>unsub();
@@ -2006,12 +2006,38 @@ useEffect(()=>{
     if(isGuest){setShowAuthModal(true);return;}
     fn();
   };
+  // 購入（コイン消費・ガチャ）に必要なメール認証ガード
+  const requirePurchase=(fn)=>{
+    if(isGuest){setShowAuthModal(true);return;}
+    if(user&&user.email&&!user.emailVerified){notify("メール認証が完了していません。確認メールのリンクをクリックしてください 📧");return;}
+    fn();
+  };
+  // 確認メール再送
+  const resendVerification=async()=>{
+    try{
+      if(auth.currentUser){
+        await sendEmailVerification(auth.currentUser);
+        notify("確認メールを再送しました 📧");
+      }
+    }catch(e){notify("再送に失敗しました。しばらくしてからお試しください");}
+  };
+  // 認証完了チェック（リンクを踏んだ後の更新用）
+  const refreshVerification=async()=>{
+    try{
+      if(auth.currentUser){
+        await auth.currentUser.reload();
+        const v=auth.currentUser.emailVerified;
+        setUser(u=>u?{...u,emailVerified:v}:u);
+        notify(v?"メール認証が完了しました ✅":"まだ認証が完了していません");
+      }
+    }catch(e){}
+  };
   const packs=PACKS.map(p=>({...p,remaining:remainings[p.id]}));
   const notify=(msg)=>{setNotification(msg);setTimeout(()=>setNotification(null),2200);};
 
   const drawPack1Card = (idx) => deck1[idx] || {name:"なにかのRRカード",rarity:"RR",image:"🎴",prizeRank:"ハズレ"};
 
-  const doDraw=(pack)=>requireLogin(()=>{
+  const doDraw=(pack)=>requirePurchase(()=>{
     if(remainings[pack.id]<=0){notify("残り口数がありません");return;}
     if(coins<pack.price){notify(`コインが足りません 🪙 (必要: ${pack.price.toLocaleString()})`);return;}
     let card;
@@ -2037,7 +2063,7 @@ useEffect(()=>{
     setRevealPack({...pack,remaining:remainings[pack.id],_afterMulti:singleMulti});
   });
 
-  const doMultiDraw=(pack,count)=>requireLogin(()=>{
+  const doMultiDraw=(pack,count)=>requirePurchase(()=>{
     const actual=Math.min(count,remainings[pack.id]);
     if(actual<=0){notify("残り口数がありません");return;}
     const totalCost=pack.price*actual;
@@ -2095,6 +2121,14 @@ useEffect(()=>{
       <style>{`@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}} *{box-sizing:border-box;margin:0;padding:0} ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:#06060e} ::-webkit-scrollbar-thumb{background:#1a1a2a;border-radius:2px}`}</style>
 
       {notification&&<div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.4)",color:"#ffd700",padding:"10px 28px",borderRadius:30,fontSize:13,zIndex:3000,backdropFilter:"blur(12px)",whiteSpace:"nowrap"}}>{notification}</div>}
+
+      {!isGuest&&user&&user.email&&!user.emailVerified&&(
+        <div style={{background:"rgba(217,79,110,0.12)",borderBottom:"1px solid rgba(217,79,110,0.3)",color:"#ffb3c1",padding:"10px 16px",fontSize:12,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
+          <span>📧 メール認証が未完了です。購入にはメール認証が必要です。</span>
+          <button onClick={resendVerification} style={{background:"transparent",border:"1px solid rgba(217,79,110,0.5)",color:"#ffb3c1",padding:"4px 12px",borderRadius:14,fontSize:11,fontWeight:700,cursor:"pointer"}}>メールを再送</button>
+          <button onClick={refreshVerification} style={{background:"transparent",border:"none",color:"#ffb3c1",padding:"4px 8px",fontSize:11,textDecoration:"underline",cursor:"pointer"}}>認証した</button>
+        </div>
+      )}
 
       <header style={{position:"sticky",top:0,zIndex:100,background:"rgba(6,6,14,0.97)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
         <div style={{height:52,display:"flex",alignItems:"center",gap:10,padding:"0 16px"}}>
