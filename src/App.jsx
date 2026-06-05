@@ -32,12 +32,8 @@ const INVITE_COIN = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAYAA
 const PACKS = [
   { id:1, name:"メガルカリオ ex パック", subtitle:"MEGA LUCARIO EX PACK", price:300, total:160, remaining:160, accent:"#ffd700", bg:"linear-gradient(160deg,#0a1628,#1a2d50)", headerBg:"linear-gradient(135deg,#1565c0,#0d47a1)", tag:"人気No.1", note:"1/8で3等以上確定！", category:"regular",
     prizes:[{rank:"1等",label:"メガルカリオ ex SAR",color:"#ff4488",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"メガズルズキン / ルリナ / サイトウ 他",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"1,000円相当（SAR,SR,UR,RR,パックなど）",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"なにかのRRカード",color:"#60b8ff",emoji:"🃏",rarity:"RR"}]},
-  { id:2, name:"ピカチュウ ex パック", subtitle:"PIKACHU EX PACK", price:500, total:100, remaining:88, accent:"#ffe066", bg:"linear-gradient(160deg,#1a1400,#3a2e00)", headerBg:"linear-gradient(135deg,#f9a825,#f57f17)", tag:"SAR確率UP", note:"15/100口で確定", category:"recommend",
-    prizes:[{rank:"1等",label:"ピカチュウ ex SAR",color:"#ff4488",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"SR各種",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"RRカード各種",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"U/Cカード",color:"#555",emoji:"🃏",rarity:"C"}]},
-  { id:3, name:"リザードン ex パック", subtitle:"CHARIZARD EX PACK", price:1000, total:50, remaining:41, accent:"#ff6a00", bg:"linear-gradient(160deg,#1a0800,#3a1200)", headerBg:"linear-gradient(135deg,#e64a19,#bf360c)", tag:"高額確定", note:"全口数でR以上確定", category:"recommend",
-    prizes:[{rank:"1等",label:"リザードン ex SAR",color:"#ff4488",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"SAR/SR各種",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"RR以上確定",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"Rカード",color:"#88ddaa",emoji:"🃏",rarity:"R"}]},
-  { id:4, name:"鬼熱決戦ZONE", subtitle:"ONI ATSU ZONE", price:77, total:1000000, remaining:960915, accent:"#ff1493", bg:"linear-gradient(160deg,#1a0010,#3a0030,#1a0010)", headerBg:"linear-gradient(135deg,#6a0dad,#c0392b,#ff1493)", tag:"🔥NEW", note:"1/99でプチュン＆6,000coin以上確定！", category:"recommend", special:true,
-    prizes:[{rank:"1等",label:"リーリエ SAR / 高額PSA10",color:"#ff1493",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"SR/SARカード各種",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"RRカード各種",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"最低保証2coin",color:"#888",emoji:"🃏",rarity:"C"}]},
+  { id:5, name:"メガルカリオ ex パック II", subtitle:"MEGA LUCARIO EX PACK II", price:300, total:160, remaining:160, accent:"#ffd700", bg:"linear-gradient(160deg,#0a1628,#1a2d50)", headerBg:"linear-gradient(135deg,#1565c0,#0d47a1)", tag:"人気No.1", note:"1/8で3等以上確定！", category:"regular",
+    prizes:[{rank:"1等",label:"メガルカリオ ex SAR",color:"#ff4488",emoji:"🏆",rarity:"SAR"},{rank:"2等",label:"メガズルズキン / ルリナ / サイトウ 他",color:"#ffd700",emoji:"🥇",rarity:"SR"},{rank:"3等",label:"1,000円相当（SAR,SR,UR,RR,パックなど）",color:"#60b8ff",emoji:"🥈",rarity:"RR"},{rank:"ハズレ",label:"なにかのRRカード",color:"#60b8ff",emoji:"🃏",rarity:"RR"}]},
 ];
 
 const RCFG = {
@@ -2109,12 +2105,17 @@ export default function App(){
   },[user]);
   // Firestoreから口数をリアルタイム読み込み
 useEffect(()=>{
-  const unsub=onSnapshot(doc(db,"packs","pack1"),(d)=>{
+  const unsub1=onSnapshot(doc(db,"packs","pack1"),(d)=>{
     if(d.exists()){
       setRemainingMap(prev=>({...prev,1:d.data().remaining}));
     }
   });
-  return()=>unsub();
+  const unsub5=onSnapshot(doc(db,"packs","pack5"),(d)=>{
+    if(d.exists()){
+      setRemainingMap(prev=>({...prev,5:d.data().remaining}));
+    }
+  });
+  return()=>{unsub1();unsub5();};
 },[]);
   useEffect(()=>{
     if(!user||isGuest)return;
@@ -2169,7 +2170,7 @@ useEffect(()=>{
     if(remainings[pack.id]<=0){notify("残り口数がありません");return;}
     if(coins<pack.price){notify(`コインが足りません 🪙 (必要: ${pack.price.toLocaleString()})`);return;}
     let card;
-    if(pack.id===1){
+    if(pack.id===1||pack.id===5){
       card = drawPack1Card(deck1Idx);
       setDeck1Idx(i=>i+1);
     } else {
@@ -2181,9 +2182,8 @@ useEffect(()=>{
     setHistory(prev=>[{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize},...prev]);
     if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-pack.price),totalIssued:increment(-pack.price)},{merge:true});}
     else{setCoins(c=>c-pack.price);setTotalIssued(t=>Math.max(0,t-pack.price));}
-    if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
+    if(pack.id===1||pack.id===5)setDoc(doc(db,"packs","pack"+pack.id),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
-    if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
     const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
     const singleMulti={cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}};
     setPendingCards(prev=>[...prev,cardWithPrize]);
@@ -2197,7 +2197,7 @@ useEffect(()=>{
     const totalCost=pack.price*actual;
     if(coins<totalCost){notify(`コインが足りません 🪙 (必要: ${totalCost.toLocaleString()})`);return;}
     let cards;
-    if(pack.id===1){
+    if(pack.id===1||pack.id===5){
       cards = [];
       for(let i=0;i<actual;i++) cards.push(drawPack1Card(deck1Idx+i));
       setDeck1Idx(i=>i+actual);
@@ -2210,9 +2210,8 @@ useEffect(()=>{
     setHistory(prev=>[...cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString(),prize:prizes[i]})),...prev]);
     if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-totalCost),totalIssued:increment(-totalCost)},{merge:true});}
     else{setCoins(c=>c-totalCost);setTotalIssued(t=>Math.max(0,t-totalCost));}
-    if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
+    if(pack.id===1||pack.id===5)setDoc(doc(db,"packs","pack"+pack.id),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
     setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-actual)}));
-    if(pack.id===1)setDoc(doc(db,"packs","pack1"),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
     const snap={...pack,remaining:remainings[pack.id]};
     const multi={cards,pack:snap};
     const RO={"1等":0,"2等":1,"3等":2,"4等":3,"ハズレ":4};
