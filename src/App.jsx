@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
+import charMushroom from "./assets/char_mushroom.webp";
+import charFish from "./assets/char_fish.webp";
 
 const REAL_CARDS = {
   sar: [
@@ -157,6 +159,8 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const aura=AURA[auraLevel];
   // クライマックス演出を出すかどうか(高レア = 金/虹到達ランク)
   const isClimax=auraTarget>=4;
+  // 登場キャラ: 1等はキノコ(赤系の決め演出)、2等は魚(青系)。色も対応させる
+  const climaxChar=rankNum===1?{img:charMushroom,glow:"rgba(255,90,120,0.9)",label:"開眼"}:{img:charFish,glow:"rgba(80,180,255,0.9)",label:"覚醒"};
   // 中央へ集まる光の粒(収束演出)。出発点をランダムに散らす
   const convergePts=useMemo(()=>[...Array(isClimax?36:0)].map((_,i)=>({
     id:i,
@@ -273,6 +277,9 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
         @keyframes whiteOut{0%{opacity:0}40%{opacity:1}100%{opacity:1}}
         @keyframes ggShimmer{0%{background-position:0% center}100%{background-position:200% center}}
         @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0.4}}
+        @keyframes charIn{0%{transform:translate(-50%,40px) scale(0.4);opacity:0;filter:blur(8px)}55%{transform:translate(-50%,-12px) scale(1.12);opacity:1;filter:blur(0)}75%{transform:translate(-50%,4px) scale(0.97)}100%{transform:translate(-50%,0) scale(1);opacity:1}}
+        @keyframes charFloat{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-10px)}}
+        @keyframes charGlow{0%,100%{filter:drop-shadow(0 0 18px var(--cg)) drop-shadow(0 0 36px var(--cg))}50%{filter:drop-shadow(0 0 32px var(--cg)) drop-shadow(0 0 64px var(--cg)) brightness(1.15)}}
       `}</style>
 
       {phase==="countdown"&&(
@@ -317,6 +324,9 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
           {/* 舞い上がる金パーティクル */}
           {goldRise.map(p=><div key={p.id} style={{position:"absolute",bottom:0,left:`${p.x}%`,width:p.size,height:p.size,borderRadius:"50%",background:rankNum===1?`hsl(${p.id*15},100%,70%)`:"#ffe680",boxShadow:`0 0 10px ${rankNum===1?"#ff88ff":"#ffd700"}`,animation:`goldRise ${p.dur}s ease-out ${p.delay}s infinite`,pointerEvents:"none"}}/>)}
           {/* 期待度/確定テロップ */}
+          {rankNum<=2&&(
+            <img src={climaxChar.img} alt="" style={{position:"absolute",bottom:"6%",left:"50%",height:"58%",maxHeight:480,zIndex:9,"--cg":climaxChar.glow,animation:"charIn 0.7s cubic-bezier(0.175,0.885,0.32,1.275) 0.2s both,charFloat 2.4s ease-in-out 0.9s infinite,charGlow 1.6s ease-in-out 0.9s infinite",pointerEvents:"none",userSelect:"none"}}/>
+          )}
           <div style={{position:"absolute",top:"30%",left:"50%",zIndex:10,animation:"textPop 0.6s cubic-bezier(0.175,0.885,0.32,1.275) 0.3s both",pointerEvents:"none",whiteSpace:"nowrap"}}>
             <div style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:rankNum===1?52:40,letterSpacing:2,
               background:rankNum===1?"linear-gradient(90deg,#ff4488,#ffd700,#44ff88,#44aaff,#ff4488)":"linear-gradient(90deg,#ffd700,#fff6c0,#ffae00,#ffd700)",
