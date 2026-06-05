@@ -155,6 +155,26 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
     {c:"#ff66cc",g:"rgba(255,102,204,0.95)",name:"虹",rainbow:true},
   ];
   const aura=AURA[auraLevel];
+  // クライマックス演出を出すかどうか(高レア = 金/虹到達ランク)
+  const isClimax=auraTarget>=4;
+  // 中央へ集まる光の粒(収束演出)。出発点をランダムに散らす
+  const convergePts=useMemo(()=>[...Array(isClimax?36:0)].map((_,i)=>({
+    id:i,
+    fx:(Math.random()*2-1)*60+"vw",
+    fy:(Math.random()*2-1)*60+"vh",
+    size:4+Math.random()*8,
+    dur:0.9+Math.random()*0.7,
+    delay:Math.random()*0.8,
+  })),[isClimax]);
+  // クライマックスで舞い上がる金パーティクル
+  const goldRise=useMemo(()=>[...Array(isClimax?30:0)].map((_,i)=>({
+    id:i,x:Math.random()*100,size:3+Math.random()*7,dur:1.6+Math.random()*1.8,delay:Math.random()*1.5,
+  })),[isClimax]);
+  // 確定時の紙吹雪
+  const confetti=useMemo(()=>[...Array(rankNum<=2?50:0)].map((_,i)=>({
+    id:i,x:Math.random()*100,size:6+Math.random()*8,dur:2+Math.random()*2,delay:Math.random()*1.2,
+    col:rankNum===1?`hsl(${Math.random()*360},90%,60%)`:`hsl(${40+Math.random()*15},95%,${55+Math.random()*15}%)`,
+  })),[rankNum]);
 
   const skip=()=>{timers.current.forEach(clearTimeout);setPhase("done");};
 
@@ -190,6 +210,18 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
       ts.push(setTimeout(()=>setPhase("puchun_cut"),delay));
       ts.push(setTimeout(()=>setPhase("puchun_slam"),delay+600));
       ts.push(setTimeout(()=>setPhase("done"),delay+2800));
+      timers.current.push(...ts);
+    }else if(isClimax){
+      // 高レア専用タイムライン: 静か→収束→金強化→クライマックス→白フラッシュ→結果
+      const ts=[
+        setTimeout(()=>setCount(2),2600),
+        setTimeout(()=>setCount(1),5000),
+        setTimeout(()=>setPhase("converge"),6600),   // 光が中央に集まる
+        setTimeout(()=>setPhase("climax"),7600),      // 金色コア炸裂・最高潮
+        setTimeout(()=>setPhase("flash"),9000),       // 全画面白フラッシュ
+        setTimeout(()=>setPhase("card"),9300),
+        setTimeout(()=>setPhase("done"),10000),
+      ];
       timers.current.push(...ts);
     }else{
       const ts=[
@@ -228,6 +260,19 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
         @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
         @keyframes promoflash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
         @keyframes chancein{0%{transform:translateX(-50%) scale(0) rotate(-10deg);opacity:0}60%{transform:translateX(-50%) scale(1.25) rotate(3deg);opacity:1}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
+        @keyframes converge{0%{transform:translate(var(--fx),var(--fy)) scale(1);opacity:0}25%{opacity:1}100%{transform:translate(0,0) scale(0.2);opacity:1}}
+        @keyframes coreGrow{0%{transform:scale(0.1);opacity:0;filter:blur(8px) brightness(1)}55%{opacity:1}100%{transform:scale(1.15);opacity:1;filter:blur(2px) brightness(2.2)}}
+        @keyframes corePulse{0%,100%{transform:scale(1);filter:brightness(1.6)}50%{transform:scale(1.12);filter:brightness(2.6)}}
+        @keyframes flareRot{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        @keyframes flareRay{0%,100%{opacity:0.35;transform:scaleY(0.9)}50%{opacity:0.9;transform:scaleY(1.15)}}
+        @keyframes goldRise{0%{transform:translateY(0) scale(1);opacity:0}15%{opacity:1}100%{transform:translateY(-95vh) scale(0.2);opacity:0}}
+        @keyframes camShake{0%,100%{transform:translate(0,0)}15%{transform:translate(-8px,5px)}30%{transform:translate(7px,-6px)}45%{transform:translate(-6px,-4px)}60%{transform:translate(6px,5px)}75%{transform:translate(-4px,3px)}}
+        @keyframes camShakeHard{0%,100%{transform:translate(0,0) rotate(0)}10%{transform:translate(-16px,8px) rotate(-0.6deg)}25%{transform:translate(14px,-10px) rotate(0.5deg)}40%{transform:translate(-12px,-8px) rotate(-0.4deg)}55%{transform:translate(13px,9px) rotate(0.5deg)}70%{transform:translate(-8px,5px) rotate(-0.3deg)}85%{transform:translate(6px,-4px)}}
+        @keyframes climaxBg{0%{background:radial-gradient(circle at 50% 50%,#1a1200,#000)}100%{background:radial-gradient(circle at 50% 50%,#5a4200,#1a0e00)}}
+        @keyframes textPop{0%{transform:translateX(-50%) scale(0);opacity:0;filter:blur(6px)}50%{transform:translateX(-50%) scale(1.18)}70%{transform:translateX(-50%) scale(0.95)}100%{transform:translateX(-50%) scale(1);opacity:1;filter:blur(0)}}
+        @keyframes whiteOut{0%{opacity:0}40%{opacity:1}100%{opacity:1}}
+        @keyframes ggShimmer{0%{background-position:0% center}100%{background-position:200% center}}
+        @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0.4}}
       `}</style>
 
       {phase==="countdown"&&(
@@ -251,7 +296,40 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
         </div>
       )}
 
-      {phase==="flash"&&<div style={{fontSize:80}}>✨</div>}
+      {phase==="converge"&&(
+        <div style={{position:"absolute",inset:0,overflow:"hidden",background:"radial-gradient(circle at 50% 50%,#1a1200,#000)",animation:"camShake 0.6s ease-in-out infinite"}}>
+          {/* 中央へ集まる金色の光の粒 */}
+          {convergePts.map(p=><div key={p.id} style={{position:"absolute",left:"50%",top:"50%",width:p.size,height:p.size,borderRadius:"50%",background:"#ffe680",boxShadow:"0 0 12px #ffd700,0 0 24px #ffae00","--fx":p.fx,"--fy":p.fy,animation:`converge ${p.dur}s cubic-bezier(0.5,0,0.7,0) ${p.delay}s forwards`,pointerEvents:"none"}}/>)}
+          {/* 中央のコア(集まってきた光が溜まる) */}
+          <div style={{position:"absolute",left:"50%",top:"50%",width:120,height:120,marginLeft:-60,marginTop:-60,borderRadius:"50%",background:"radial-gradient(circle,#fff,#ffd700 40%,transparent 70%)",filter:"blur(2px)",animation:"coreGrow 1s ease-in forwards",pointerEvents:"none"}}/>
+        </div>
+      )}
+
+      {phase==="climax"&&(
+        <div style={{position:"absolute",inset:0,overflow:"hidden",animation:`${rankNum===1?"camShakeHard 0.5s":"camShake 0.5s"} ease-in-out infinite,climaxBg 1.4s ease-out forwards`}}>
+          {/* レンズフレア: 回転する光線 */}
+          <div style={{position:"absolute",left:"50%",top:"50%",width:"200vmax",height:"200vmax",marginLeft:"-100vmax",marginTop:"-100vmax",animation:"flareRot 6s linear infinite",pointerEvents:"none"}}>
+            {[...Array(16)].map((_,i)=><div key={i} style={{position:"absolute",left:"50%",top:0,width:i%2===0?6:2,height:"50%",transformOrigin:"bottom center",transform:`translateX(-50%) rotate(${i*22.5}deg)`,background:`linear-gradient(to top,${rankNum===1?"rgba(255,160,255,0)":"rgba(255,215,0,0)"},${rankNum===1?"rgba(255,180,255,0.85)":"rgba(255,225,120,0.85)"})`,animation:`flareRay ${1.2+i*0.05}s ease-in-out infinite`}}/>)}
+          </div>
+          {/* Bloom発光コア(多層) */}
+          <div style={{position:"absolute",left:"50%",top:"50%",width:420,height:420,marginLeft:-210,marginTop:-210,borderRadius:"50%",background:`radial-gradient(circle,#fff,${rankNum===1?"#ffccff":"#ffd700"} 35%,transparent 70%)`,filter:"blur(14px)",animation:"corePulse 0.8s ease-in-out infinite",pointerEvents:"none"}}/>
+          <div style={{position:"absolute",left:"50%",top:"50%",width:200,height:200,marginLeft:-100,marginTop:-100,borderRadius:"50%",background:"radial-gradient(circle,#fff,#fff6c8 50%,transparent 72%)",filter:"blur(4px)",animation:"corePulse 0.8s ease-in-out infinite",pointerEvents:"none"}}/>
+          {/* 舞い上がる金パーティクル */}
+          {goldRise.map(p=><div key={p.id} style={{position:"absolute",bottom:0,left:`${p.x}%`,width:p.size,height:p.size,borderRadius:"50%",background:rankNum===1?`hsl(${p.id*15},100%,70%)`:"#ffe680",boxShadow:`0 0 10px ${rankNum===1?"#ff88ff":"#ffd700"}`,animation:`goldRise ${p.dur}s ease-out ${p.delay}s infinite`,pointerEvents:"none"}}/>)}
+          {/* 期待度/確定テロップ */}
+          <div style={{position:"absolute",top:"30%",left:"50%",zIndex:10,animation:"textPop 0.6s cubic-bezier(0.175,0.885,0.32,1.275) 0.3s both",pointerEvents:"none",whiteSpace:"nowrap"}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:rankNum===1?52:40,letterSpacing:2,
+              background:rankNum===1?"linear-gradient(90deg,#ff4488,#ffd700,#44ff88,#44aaff,#ff4488)":"linear-gradient(90deg,#ffd700,#fff6c0,#ffae00,#ffd700)",
+              backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+              filter:`drop-shadow(0 0 18px ${rankNum===1?"rgba(255,120,255,0.9)":"rgba(255,200,0,0.9)"})`,
+              animation:"ggShimmer 1.5s linear infinite"}}>
+              {rankNum===1?"★ 1等 確定!! ★":rankNum===2?"★ 期待度 MAX ★":"★ CHANCE ★"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {phase==="flash"&&<div style={{position:"absolute",inset:0,background:"#fff",animation:"whiteOut 0.3s ease-out forwards"}}/>}
 
       {phase==="puchun_cut"&&<div style={{position:"absolute",inset:0,background:"#fff"}}/>}
 
@@ -271,6 +349,7 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
           <div style={{position:"absolute",inset:0,pointerEvents:"none",background:`radial-gradient(ellipse 60% 55% at 50% 42%,${cs.glow},transparent 65%)`,animation:"gp 2s ease-in-out infinite"}}/>
           {rankNum===1&&<div style={{position:"absolute",inset:0,pointerEvents:"none",background:"linear-gradient(135deg,#ff000033,#ff880022,#ffff0022,#00ff8822,#0088ff22,#8800ff22)",animation:"rainbow 2.5s linear infinite"}}/>}
           {phase==="done"&&pts.map(p=><div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.size,height:p.size,borderRadius:"50%",background:rankNum===1?`hsl(${p.id*18},100%,65%)`:cs.border,animation:`pup ${p.dur}s ease-out ${p.delay}s infinite`,pointerEvents:"none"}}/>)}
+          {phase==="done"&&confetti.map(c=><div key={"cf"+c.id} style={{position:"absolute",left:`${c.x}%`,top:0,width:c.size,height:c.size*0.5,background:c.col,animation:`confettiFall ${c.dur}s linear ${c.delay}s infinite`,pointerEvents:"none"}}/>)}
           {phase==="done"&&stars.map(s=><div key={s.id} style={{position:"absolute",left:`${s.x}%`,top:`${s.y}%`,fontSize:s.s,color:rankNum===1?`hsl(${s.id*18},100%,70%)`:cs.border,animation:`stw ${s.dur}s ease-in-out ${s.delay}s infinite`,pointerEvents:"none"}}>✦</div>)}
           {phase==="done"&&revealed&&(
             <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontWeight:900,fontSize:rankNum===1?30:rankNum===2?26:22,color:rankNum===1?"#fff":cs.border,textShadow:`0 0 40px ${cs.glow}`,marginBottom:16,letterSpacing:2,position:"relative",zIndex:10,animation:"rpop 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both",background:rankNum===1?"linear-gradient(90deg,#ff4488,#ffd700,#44ff88,#44aaff,#ff4488)":"none",WebkitBackgroundClip:rankNum===1?"text":"unset",WebkitTextFillColor:rankNum===1?"transparent":"unset",backgroundSize:"200% auto"}}>
