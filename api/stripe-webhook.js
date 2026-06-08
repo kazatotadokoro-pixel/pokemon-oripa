@@ -61,15 +61,55 @@ export default async function handler(req, res) {
           // すでに処理済み。何もしない
           return;
         }
-        // コインを加算（incrementで競合に強い形にする）
-        tx.set(userRef, {
+        // 購入者のデータを読む(招待報酬の判定に使う)
+        const buyerSnap = await tx.get(userRef);
+        const buyer = buyerSnap.exists ? buyerSnap.data() : {};
+
+        // --- 招待報酬の判定 ---
+        // 条件: この人が「招待されて登録」しており(invitedBy)、かつ
+        //       まだ一度も招待報酬を発生させていない(inviteRewardGranted が未設定) 場合のみ。
+        //       = 「招待された人の初回課金」のときだけ両者に付与する
+        let inviterRef = null;
+        let grantInvite = false;
+        if (buyer.invitedBy && !buyer.inviteRewardGranted) {
+          const candidate = adminDb.collection('users').doc(buyer.invitedBy);
+          const inviterSnap = await tx.get(candidate);
+          if (inviterSnap.exists) {
+            const inviter = inviterSnap.data();
+            // 招待した人の招待成立数が上限(10)未満のときだけ報酬を出す
+            const cnt = inviter.inviteCount || 0;
+            if (cnt < 10) {
+              inviterRef = candidate;
+              grantInvite = true;
+            }
+          }
+        }
+
+        // 購入コインを加算
+        const updates = {
           coins: FieldValue.increment(coins),
           totalIssued: FieldValue.increment(coins),
-        }, { merge: true });
+        };
+        if (grantInvite) {
+          // 招待された人(購入者)に招待限定コイン1 + 報酬済みフラグ
+          updates.inviteCoins = FieldValue.increment(1);
+          updates.inviteRewardGranted = true;
+        }
+        tx.set(userRef, updates, { merge: true });
+
+        if (grantInvite && inviterRef) {
+          // 招待した人にも招待限定コイン1 + 招待成立数+1
+          tx.set(inviterRef, {
+            inviteCoins: FieldValue.increment(1),
+            inviteCount: FieldValue.increment(1),
+          }, { merge: true });
+        }
+
         // 処理済みとして記録
         tx.set(eventRef, {
           userId,
           coins,
+          inviteGranted: grantInvite,
           processedAt: FieldValue.serverTimestamp(),
         });
       });

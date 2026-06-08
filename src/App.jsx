@@ -1389,17 +1389,9 @@ function RankingPage({history,user,coins,inviteCount}){
 }
 
 // ===== 招待コードモーダル =====
-function InviteModal({onClose,user,onInviteUsed}){
-  const [myCode]=useState(()=>{
-    const saved=localStorage.getItem("myInviteCode");
-    if(saved) return saved;
-    const code=(user?.name||"USER").slice(0,3).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
-    localStorage.setItem("myInviteCode",code);
-    return code;
-  });
-  const [inputCode,setInputCode]=useState("");
-  const [msg,setMsg]=useState(null);
+function InviteModal({onClose,user,myInviteCode,inviteCount,inviteCoins}){
   const [copied,setCopied]=useState(false);
+  const myCode=myInviteCode||"------";
 
   const copyCode=()=>{
     navigator.clipboard?.writeText(myCode);
@@ -1407,28 +1399,17 @@ function InviteModal({onClose,user,onInviteUsed}){
     setTimeout(()=>setCopied(false),2000);
   };
 
-  const useCode=()=>{
-    const code=inputCode.trim().toUpperCase();
-    if(!code){setMsg({type:"error",text:"招待コードを入力してください"});return;}
-    if(code===myCode){setMsg({type:"error",text:"自分の招待コードは使えません"});return;}
-    const used=JSON.parse(localStorage.getItem("usedInviteCodes")||"[]");
-    if(used.includes(code)){setMsg({type:"error",text:"このコードはすでに使用済みです"});return;}
-    // デモ: どんなコードでも受け付ける
-    used.push(code);
-    localStorage.setItem("usedInviteCodes",JSON.stringify(used));
-    onInviteUsed&&onInviteUsed(1); // 1コインボーナス
-    setMsg({type:"ok",text:"招待コード適用！1コインプレゼント 🎉"});
-    setInputCode("");
-  };
-
-  const inviteCount=JSON.parse(localStorage.getItem("inviteCount")||"0");
-
   return(
     <div style={{position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#0e0e1a",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:500,border:"1px solid #1a1a2a",fontFamily:"'Noto Sans JP',sans-serif",padding:"28px 24px 44px"}}>
         <div style={{display:"flex",alignItems:"center",marginBottom:24}}>
           <div style={{flex:1,color:"#fff",fontWeight:900,fontSize:17}}>👥 友達招待</div>
           <button onClick={onClose} style={{background:"none",border:"none",color:"#555",fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+
+        {/* 仕組みの説明 */}
+        <div style={{background:"rgba(255,215,0,0.08)",border:"1px solid rgba(255,215,0,0.25)",borderRadius:12,padding:"14px 16px",marginBottom:20,color:"#ffd700",fontSize:12,lineHeight:1.7}}>
+          友達が招待コードを使って登録し、初めてコインを購入すると、<b>あなたと友達の両方に招待コインを1枚ずつ</b>プレゼント！(最大10人まで)
         </div>
 
         {/* 自分のコード */}
@@ -1440,25 +1421,19 @@ function InviteModal({onClose,user,onInviteUsed}){
               {copied?"✓ コピー済":"コピー"}
             </button>
           </div>
-          <div style={{color:"#555",fontSize:11,marginTop:8}}>友達がこのコードを使うと500コインをプレゼント！</div>
-          {inviteCount>0&&<div style={{color:"#2ecc71",fontSize:12,marginTop:6,fontWeight:700}}>✅ {inviteCount}人が招待コードを使用</div>}
+          <div style={{display:"flex",gap:16,marginTop:12}}>
+            <div style={{color:"#2ecc71",fontSize:12,fontWeight:700}}>✅ 招待成立 {inviteCount||0} / 10人</div>
+            <div style={{color:"#ffd700",fontSize:12,fontWeight:700}}>🪙 招待コイン {inviteCoins||0}</div>
+          </div>
         </div>
 
         {/* SNSシェア */}
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
-          <button onClick={()=>window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`ポケモンオリパで招待コード【${myCode}】を使うと1コインもらえるよ！ #ポケモンオリパ`)}`,"_blank")} style={{flex:1,background:"#1DA1F2",border:"none",color:"#fff",padding:"10px",borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>𝕏 シェア</button>
-          <button onClick={()=>window.open(`https://social-plugins.line.me/lineit/share?text=${encodeURIComponent(`招待コードでポケモンオリパを始めよう！1コインプレゼント中！`)}`,"_blank")} style={{flex:1,background:"#06C755",border:"none",color:"#fff",padding:"10px",borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>LINE</button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`オリパラックを招待コード【${myCode}】で登録してみてね！ https://oripaluck.jp #ポケカ #オリパ`)}`,"_blank")} style={{flex:1,background:"#1DA1F2",border:"none",color:"#fff",padding:"12px",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer"}}>𝕏 シェア</button>
+          <button onClick={()=>window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent("https://oripaluck.jp")}&text=${encodeURIComponent(`オリパラックを招待コード【${myCode}】で登録してみてね！`)}`,"_blank")} style={{flex:1,background:"#06C755",border:"none",color:"#fff",padding:"12px",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer"}}>LINE</button>
         </div>
 
-        <div style={{height:1,background:"#1a1a2a",marginBottom:20}}/>
-
-        {/* 招待コード入力 */}
-        <div style={{color:"#888",fontSize:11,marginBottom:8}}>招待コードをお持ちの方</div>
-        <div style={{display:"flex",gap:8,marginBottom:10}}>
-          <input value={inputCode} onChange={e=>{setInputCode(e.target.value.toUpperCase());setMsg(null);}} placeholder="招待コードを入力" style={{flex:1,background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"13px 16px",color:"#fff",fontSize:14,outline:"none",letterSpacing:2}}/>
-          <button onClick={useCode} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"0 18px",borderRadius:10,fontWeight:900,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>使う</button>
-        </div>
-        {msg&&<div style={{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"rgba(46,204,113,0.12)":"rgba(255,60,60,0.1)",border:`1px solid ${msg.type==="ok"?"rgba(46,204,113,0.4)":"rgba(255,60,60,0.3)"}`,color:msg.type==="ok"?"#2ecc71":"#ff6666",fontSize:13}}>{msg.text}</div>}
+        <div style={{color:"#555",fontSize:10,textAlign:"center",marginTop:16,lineHeight:1.6}}>招待コードは新規登録時に入力できます。<br/>登録後の入力はできません。</div>
       </div>
     </div>
   );
@@ -1826,6 +1801,7 @@ function AuthScreen({onLogin}){
   const [name,setName]=useState("");
   const [phone,setPhone]=useState("");
   const [code,setCode]=useState("");
+  const [inviteInput,setInviteInput]=useState("");
   const [sentCode,setSentCode]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
@@ -1854,10 +1830,30 @@ function AuthScreen({onLogin}){
     if(pass.length<6){setErr("パスワードは6文字以上にしてください");return;}
     setLoading(true);
     createUserWithEmailAndPassword(auth,email,pass)
-      .then(cred=>{
-        setDoc(doc(db,"users",cred.user.uid),{name,email,coins:1250,createdAt:new Date().toISOString()});
+      .then(async(cred)=>{
+        const uid=cred.user.uid;
+        // このユーザー固有の招待コードを発行(名前の頭3文字 + ランダム4文字)
+        const myCode=(name||"USER").replace(/[^A-Za-z0-9]/g,"").slice(0,3).toUpperCase().padEnd(3,"X")+Math.random().toString(36).slice(2,6).toUpperCase();
+        // 入力された招待コードがあれば、その持ち主(招待者)を探す
+        let invitedBy=null;
+        const entered=inviteInput.trim().toUpperCase();
+        if(entered){
+          try{
+            const snap=await getDoc(doc(db,"inviteCodes",entered));
+            if(snap.exists()){
+              const owner=snap.data().userId;
+              if(owner&&owner!==uid) invitedBy=owner; // 自分のコードは無効
+            }
+          }catch(e){}
+        }
+        // ユーザーデータを保存(招待された場合はinvitedByを記録。報酬は初回課金時にサーバーが付与)
+        const userData={name,email,coins:1250,inviteCoins:0,inviteCount:0,myInviteCode:myCode,createdAt:new Date().toISOString()};
+        if(invitedBy) userData.invitedBy=invitedBy;
+        await setDoc(doc(db,"users",uid),userData);
+        // 招待コード→自分のIDの対応をFirestoreに登録(他の人が使えるように)
+        await setDoc(doc(db,"inviteCodes",myCode),{userId:uid,createdAt:new Date().toISOString()});
         sendEmailVerification(cred.user).then(()=>alert("確認メールを送信しました。メールのリンクから認証を完了してください。")).catch(()=>{});
-        onLogin({name,email:cred.user.email,id:cred.user.uid,emailVerified:cred.user.emailVerified});
+        onLogin({name,email:cred.user.email,id:uid,emailVerified:cred.user.emailVerified});
       })
       .catch(e=>{setErr("このメールアドレスはすでに使われています");})
       .finally(()=>setLoading(false));
@@ -1948,6 +1944,7 @@ function AuthScreen({onLogin}){
               <input value={name}  onChange={e=>{setName(e.target.value);setErr("");}}  placeholder="ニックネーム"      style={inputStyle}/>
               <input value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="メールアドレス"    type="email" style={inputStyle}/>
               <input value={pass}  onChange={e=>{setPass(e.target.value);setErr("");}}  placeholder="パスワード（6文字以上）" type="password" style={inputStyle}/>
+              <input value={inviteInput} onChange={e=>{setInviteInput(e.target.value.toUpperCase());setErr("");}} placeholder="招待コード（任意）" style={{...inputStyle,letterSpacing:2}}/>
               {err&&<div style={{color:"#ff6666",fontSize:12,padding:"8px 12px",background:"rgba(255,60,60,0.1)",borderRadius:8}}>{err}</div>}
               <button onClick={handleRegister} disabled={loading} style={{...btnStyle,background:loading?"#555":"#d94f6e"}}>
                 {loading?"登録中...":"登録してはじめる"}
@@ -2073,6 +2070,7 @@ export default function App(){
   const [showInvite,setShowInvite]=useState(false);
   const [inviteCount,setInviteCount]=usePersistedState("inviteCount",0);
   const [inviteCoins,setInviteCoins]=usePersistedState("inviteCoins",0);
+  const [myInviteCode,setMyInviteCode]=useState("");
   const [showLegal,setShowLegal]=useState(null); // "terms"|"privacy"|"tokusho"
   const [deck1,setDeck1]=useState(()=>initDeck());
   const [deck1Idx,setDeck1Idx]=useState(0);
@@ -2125,6 +2123,9 @@ useEffect(()=>{
         const data=d.data();
         if(data.coins!==undefined)setCoins(data.coins);
         if(data.totalIssued!==undefined)setTotalIssued(data.totalIssued);
+        if(data.inviteCoins!==undefined)setInviteCoins(data.inviteCoins);
+        if(data.inviteCount!==undefined)setInviteCount(data.inviteCount);
+        if(data.myInviteCode!==undefined)setMyInviteCode(data.myInviteCode);
       }
     });
     return()=>unsub();
@@ -2473,7 +2474,7 @@ useEffect(()=>{
         </div>
       )}
       {showLegal&&<LegalModal type={showLegal} onClose={()=>setShowLegal(null)}/>}
-      {showInvite&&<InviteModal onClose={()=>setShowInvite(false)} user={user} onInviteUsed={(bonus)=>{setInviteCoins(c=>c+bonus);setInviteCount(n=>n+1);notify(`招待コード適用！招待コイン×${bonus}獲得🎉`);}}/>}
+      {showInvite&&<InviteModal onClose={()=>setShowInvite(false)} user={user} myInviteCode={myInviteCode} inviteCount={inviteCount} inviteCoins={inviteCoins}/>}
       {showContact&&<ContactModal onClose={()=>setShowContact(false)} user={user}/>}
       {showAgeCheck&&<AgeCheckModal onConfirm={(limit)=>{setAgeLimit(limit);setAgeConfirmed(true);setShowAgeCheck(false);if(pendingPurchase){pendingPurchase();setPendingPurchase(null);}}}/>}
       {showPhoneAuth&&<PhoneAuthModal onClose={()=>setShowPhoneAuth(false)} onVerified={()=>{setPhoneVerified(true);notify("電話番号認証が完了しました！");}}/>}
