@@ -890,7 +890,7 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
   const handlePay=(method)=>{
     const proceed=async()=>{
       try{
-        const idToken=auth.currentUser?await auth.currentUser.getIdToken():null;
+        const idToken=auth.currentUser?await auth.currentUser.getIdToken(true):null;
         if(!idToken){alert("ログインが必要です");return;}
         const res=await fetch("/api/create-checkout",{
           method:"POST",
@@ -2157,6 +2157,12 @@ useEffect(()=>{
       if(auth.currentUser){
         await auth.currentUser.reload();
         const v=auth.currentUser.emailVerified;
+        if(v){
+          // 認証済みになったら、IDトークンを強制更新する。
+          // これをしないと古いトークンに「未認証」が焼き付いたままで、
+          // サーバー側の購入チェックが通らず再ログインが必要になってしまう。
+          await auth.currentUser.getIdToken(true);
+        }
         setUser(u=>u?{...u,emailVerified:v}:u);
         notify(v?"メール認証が完了しました ✅":"まだ認証が完了していません");
       }
@@ -2251,10 +2257,10 @@ useEffect(()=>{
       {notification&&<div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.4)",color:"#ffd700",padding:"10px 28px",borderRadius:30,fontSize:13,zIndex:3000,backdropFilter:"blur(12px)",whiteSpace:"nowrap"}}>{notification}</div>}
 
       {!isGuest&&user&&user.email&&!user.emailVerified&&(
-        <div style={{background:"rgba(217,79,110,0.12)",borderBottom:"1px solid rgba(217,79,110,0.3)",color:"#ffb3c1",padding:"10px 16px",fontSize:12,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
+        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:2500,background:"rgba(217,79,110,0.97)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(217,79,110,0.5)",color:"#fff",padding:"10px 16px",fontSize:12,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.4)"}}>
           <span>📧 メール認証が未完了です。購入にはメール認証が必要です。</span>
-          <button onClick={resendVerification} style={{background:"transparent",border:"1px solid rgba(217,79,110,0.5)",color:"#ffb3c1",padding:"4px 12px",borderRadius:14,fontSize:11,fontWeight:700,cursor:"pointer"}}>メールを再送</button>
-          <button onClick={refreshVerification} style={{background:"transparent",border:"none",color:"#ffb3c1",padding:"4px 8px",fontSize:11,textDecoration:"underline",cursor:"pointer"}}>認証した</button>
+          <button onClick={resendVerification} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",padding:"4px 12px",borderRadius:14,fontSize:11,fontWeight:700,cursor:"pointer"}}>メールを再送</button>
+          <button onClick={refreshVerification} style={{background:"#fff",border:"none",color:"#d94f6e",padding:"4px 14px",borderRadius:14,fontSize:11,fontWeight:900,cursor:"pointer"}}>認証した</button>
         </div>
       )}
 
