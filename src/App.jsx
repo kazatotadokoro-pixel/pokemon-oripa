@@ -2126,6 +2126,14 @@ useEffect(()=>{
         if(data.inviteCoins!==undefined)setInviteCoins(data.inviteCoins);
         if(data.inviteCount!==undefined)setInviteCount(data.inviteCount);
         if(data.myInviteCode!==undefined)setMyInviteCode(data.myInviteCode);
+        // 招待コードが未発行の既存アカウントには、ここで発行して登録する
+        if(!data.myInviteCode){
+          const nm=(data.name||user.name||"USER").replace(/[^A-Za-z0-9]/g,"").slice(0,3).toUpperCase().padEnd(3,"X");
+          const newCode=nm+Math.random().toString(36).slice(2,6).toUpperCase();
+          setDoc(ref,{myInviteCode:newCode,inviteCoins:data.inviteCoins||0,inviteCount:data.inviteCount||0},{merge:true});
+          setDoc(doc(db,"inviteCodes",newCode),{userId:user.id,createdAt:new Date().toISOString()});
+          setMyInviteCode(newCode);
+        }
       }
     });
     return()=>unsub();
