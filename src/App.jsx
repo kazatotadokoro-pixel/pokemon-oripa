@@ -2179,55 +2179,73 @@ useEffect(()=>{
   const packs=PACKS.map(p=>({...p,remaining:remainings[p.id]}));
   const notify=(msg)=>{setNotification(msg);setTimeout(()=>setNotification(null),2200);};
 
+  // ===== サーバー抽選 連携 =====
+  // カード名→画像 の対応表（当たりカードの画像を名前で引く）
+  const IMG_BY_NAME = (() => {
+    const m = {};
+    [...REAL_CARDS.sar, ...REAL_CARDS.sr].forEach(c => { if (c.img) m[c.name] = c.img; });
+    return m;
+  })();
+  // サーバーが返すカード（画像なし）に、フロントの画像を貼る
+  const attachImage = (card) => {
+    const img = IMG_BY_NAME[card.name] || REAL_CARDS.lucario || "🎴";
+    return { ...card, img, image: card.image || img };
+  };
+  // サーバーの draw API を呼ぶ。成功で {ok,cards,coins,remaining} を返す。失敗で null。
+  const serverDraw = async (pack, count) => {
+    const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+    if (!idToken) { notify("ログインが必要です"); return null; }
+    const res = await fetch("/api/draw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, packId: pack.id, count }),
+    });
+    const data = await res.json();
+    if (!res.ok) { notify(data.error || "抽選に失敗しました"); return null; }
+    return data;
+  };
+
   const drawPack1Card = (idx) => deck1[idx] || {name:"なにかのRRカード",rarity:"RR",image:"🎴",prizeRank:"ハズレ"};
 
-  const doDraw=(pack)=>requirePurchase(()=>{
+  const doDraw=(pack)=>requirePurchase(async()=>{
     if(remainings[pack.id]<=0){notify("残り口数がありません");return;}
     if(coins<pack.price){notify(`コインが足りません 🪙 (必要: ${pack.price.toLocaleString()})`);return;}
-    let card;
-    if(pack.id===1||pack.id===5){
-      card = drawPack1Card(deck1Idx);
-      setDeck1Idx(i=>i+1);
-    } else {
-      card = drawCard(pack.id);
-    }
+    // サーバーで抽選・コイン減算・在庫減算を行う（水増し防止）
+    const result=await serverDraw(pack,1);
+    if(!result)return;
+    const card=attachImage(result.cards[0]);
     const prize=card.prizeRank
       ? pack.prizes.find(p=>p.rank===card.prizeRank)
       : pack.prizes.find(p=>p.rarity===card.rarity);
     setHistory(prev=>[{...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize},...prev]);
-    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-pack.price),totalIssued:increment(-pack.price)},{merge:true});}
-    else{setCoins(c=>c-pack.price);setTotalIssued(t=>Math.max(0,t-pack.price));}
-    if(pack.id===1||pack.id===5)setDoc(doc(db,"packs","pack"+pack.id),{remaining:Math.max(0,remainings[pack.id]-1)},{merge:true});
-    setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-1)}));
+    // 残高・在庫はサーバーが返した値で上書き（フロントは表示するだけ）
+    if(typeof result.coins==="number")setCoins(result.coins);
+    if(typeof result.remaining==="number")setRemainingMap(prev=>({...prev,[pack.id]:result.remaining}));
+    const newRemaining=typeof result.remaining==="number"?result.remaining:Math.max(0,remainings[pack.id]-1);
     const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
-    const singleMulti={cards:[cardWithPrize],pack:{...pack,remaining:remainings[pack.id]}};
+    const singleMulti={cards:[cardWithPrize],pack:{...pack,remaining:newRemaining}};
     setPendingCards(prev=>[...prev,cardWithPrize]);
     setReveal(card);
-    setRevealPack({...pack,remaining:remainings[pack.id],_afterMulti:singleMulti});
+    setRevealPack({...pack,remaining:newRemaining,_afterMulti:singleMulti});
   });
 
-  const doMultiDraw=(pack,count)=>requirePurchase(()=>{
+  const doMultiDraw=(pack,count)=>requirePurchase(async()=>{
     const actual=Math.min(count,remainings[pack.id]);
     if(actual<=0){notify("残り口数がありません");return;}
     const totalCost=pack.price*actual;
     if(coins<totalCost){notify(`コインが足りません 🪙 (必要: ${totalCost.toLocaleString()})`);return;}
-    let cards;
-    if(pack.id===1||pack.id===5){
-      cards = [];
-      for(let i=0;i<actual;i++) cards.push(drawPack1Card(deck1Idx+i));
-      setDeck1Idx(i=>i+actual);
-    } else {
-      cards = [...Array(actual)].map(()=>drawCard(pack.id));
-    }
+    // サーバーで一括抽選・コイン減算・在庫減算（水増し防止）
+    const result=await serverDraw(pack,actual);
+    if(!result)return;
+    const cards=result.cards.map(attachImage);
     const prizes=cards.map(c=>c.prizeRank
       ? pack.prizes.find(p=>p.rank===c.prizeRank)
       : pack.prizes.find(p=>p.rarity===c.rarity));
     setHistory(prev=>[...cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString(),prize:prizes[i]})),...prev]);
-    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(-totalCost),totalIssued:increment(-totalCost)},{merge:true});}
-    else{setCoins(c=>c-totalCost);setTotalIssued(t=>Math.max(0,t-totalCost));}
-    if(pack.id===1||pack.id===5)setDoc(doc(db,"packs","pack"+pack.id),{remaining:Math.max(0,remainings[pack.id]-actual)},{merge:true});
-    setRemainingMap(prev=>({...prev,[pack.id]:Math.max(0,prev[pack.id]-actual)}));
-    const snap={...pack,remaining:remainings[pack.id]};
+    if(typeof result.coins==="number")setCoins(result.coins);
+    if(typeof result.remaining==="number")setRemainingMap(prev=>({...prev,[pack.id]:result.remaining}));
+    const newRemaining=typeof result.remaining==="number"?result.remaining:Math.max(0,remainings[pack.id]-actual);
+    const snap={...pack,remaining:newRemaining};
     const multi={cards,pack:snap};
     const RO={"1等":0,"2等":1,"3等":2,"4等":3,"ハズレ":4};
     const winners=cards.map((c,i)=>({card:c,prize:prizes[i]})).filter(x=>x.prize&&x.prize.rank!=="ハズレ"&&x.prize.rank!=="4等").sort((a,b)=>(RO[a.prize.rank]??99)-(RO[b.prize.rank]??99));
