@@ -2046,14 +2046,14 @@ export default function App(){
   const MAX_ISSUED=10000000; // 1000万コイン上限
 
   // コイン発行（購入時）：上限チェック付き
+  // コイン付与はサーバー(Stripe Webhook)が行う。ここでは付与せず、上限チェックのみ。
+  // （二重付与を防ぐため、クライアントからの coins 加算は一切しない）
   const issueCoins=(amount)=>{
     if(totalIssued+amount>MAX_ISSUED){
       const canIssue=MAX_ISSUED-totalIssued;
       if(canIssue<=0){notify("現在コインの販売を一時停止しています（発行上限到達）");return false;}
-      if(!isGuest&&user)setDoc(doc(db,"users",user.id),{coins:coins+canIssue,totalIssued:MAX_ISSUED},{merge:true});
       return true;
     }
-    if(!isGuest&&user)setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});
     return true;
   };
   const [mailCount]=useState(3);
