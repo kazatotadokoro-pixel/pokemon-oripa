@@ -1,13 +1,10 @@
 // api/draw.js
-// サーバー側でガチャを引く。コインの確認・抽選・在庫減算を全部ここで行う。
-// フロントは「このパックを引きたい」とリクエストするだけ。
-// コインと在庫の数字はサーバー(Admin SDK)だけが変更できる。
+// サーバー側でガチャを引く。コインの確認・抽選・在庫減算・カード記録を全部ここで行う。
 //
-// パック1・5：案A = サーバー共有デッキ方式
-//   Firestore の packs/pack{id} に deck(カード配列) と cursor を持ち、
-//   全ユーザーがこの1個のデッキを共有して順番に引く。
-//   → 「全○口・SAR1枚確定」が本当に成立する。次の当たり位置も漏れない。
-// パック2〜4：確率方式(POOLS)。今は未使用だが将来用に残す。
+// 【きっちり版】引いたカードを users/{uid}/cards サブコレクションに記録する。
+//   各カード: {name,rarity,prizeRank,packId,status:"unopened",drawnAt,redeemValue}
+//   status: unopened(未処理) → redeemed(還元済) / shipped(発送済)
+//   これにより redeem.js が「本当に持っているカードか」を検証できる。
 
 import { adminAuth, adminDb } from "./_firebaseAdmin.js";
 import { FieldValue } from "firebase-admin/firestore";
@@ -49,13 +46,17 @@ const POOLS = {
   ],
 };
 
-// パックの価格（サーバー側でも持つ。フロントの数字は信用しない）
 const PACK_PRICES = { 1: 300, 2: 300, 3: 300, 4: 300, 5: 300 };
 
-// 共有デッキを使うパック
+// 還元額（等級ごと。フロントと一致させること）
+const REDEEM_VALUE = { "1等": 10000, "2等": 2000, "3等": 1000, "ハズレ": 1 };
+function redeemValueOf(card) {
+  if (card.prizeRank && REDEEM_VALUE[card.prizeRank] != null) return REDEEM_VALUE[card.prizeRank];
+  return 1;
+}
+
 const DECK_PACKS = new Set([1, 5]);
 
-// ===== 確率方式の抽選（パック2〜4用） =====
 function drawByChance(packId) {
   const pool = POOLS[packId];
   const total = pool.reduce((s, c) => s + c.chance, 0);
@@ -68,7 +69,28 @@ function drawByChance(packId) {
   return { name: last.name, rarity: last.rarity };
 }
 
-// ===== ハンドラ本体 =====
+// 引いたカードを users/{uid}/cards に記録する（トランザクション内で呼ぶ）
+function recordCards(tx, userRef, cards, pid) {
+  const cardsCol = userRef.collection("cards");
+  const now = FieldValue.serverTimestamp();
+  const ids = [];
+  for (const c of cards) {
+    const cardRef = cardsCol.doc();
+    tx.set(cardRef, {
+      name: c.name || "",
+      rarity: c.rarity || "",
+      prizeRank: c.prizeRank || "",
+      desc: c.desc || "",
+      packId: pid,
+      status: "unopened",
+      redeemValue: redeemValueOf(c),
+      drawnAt: now,
+    });
+    ids.push(cardRef.id);
+  }
+  return ids;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTのみ受け付けます" });
@@ -77,7 +99,6 @@ export default async function handler(req, res) {
   try {
     const { idToken, packId, count } = req.body || {};
 
-    // 1) 本人確認
     if (!idToken) return res.status(401).json({ error: "ログインが必要です" });
     let decodedToken;
     try {
@@ -87,9 +108,8 @@ export default async function handler(req, res) {
     }
     const uid = decodedToken.uid;
 
-    // 2) 入力チェック
     const pid = Number(packId);
-    const drawCount = Math.max(1, Math.min(100, Number(count) || 1)); // 1〜100連
+    const drawCount = Math.max(1, Math.min(100, Number(count) || 1));
     const price = PACK_PRICES[pid];
     const isDeck = DECK_PACKS.has(pid);
     if (!price || (!isDeck && !POOLS[pid])) {
@@ -100,9 +120,9 @@ export default async function handler(req, res) {
     const userRef = db.collection("users").doc(uid);
     let cards = [];
     let remaining = null;
+    let cardIds = [];
 
     if (isDeck) {
-      // ===== 案A：共有デッキ方式（パック1・5）=====
       const packRef = db.collection("packs").doc("pack" + pid);
 
       await db.runTransaction(async (tx) => {
@@ -115,23 +135,15 @@ export default async function handler(req, res) {
         const pdata = packSnap.data();
         const deck = pdata.deck;
         const cursor = pdata.cursor || 0;
-
         if (!Array.isArray(deck)) throw { code: "no-deck" };
 
-        // 在庫(=デッキの引ける残り)
         const left = deck.length - cursor;
         if (left <= 0) throw { code: "soldout" };
-
-        // 残り口数より多くは引けない（10連で残り3ならエラー）
         if (drawCount > left) throw { code: "not-enough-stock", left };
-
-        // コイン確認
         if (coins < totalCost) throw { code: "insufficient", need: totalCost };
 
-        // デッキの cursor から drawCount 枚を取る
         cards = deck.slice(cursor, cursor + drawCount);
 
-        // cursor を進める / コインを減らす / remaining を更新
         const newCursor = cursor + drawCount;
         remaining = deck.length - newCursor;
         tx.update(packRef, { cursor: newCursor, remaining });
@@ -139,9 +151,9 @@ export default async function handler(req, res) {
           coins: FieldValue.increment(-totalCost),
           totalIssued: FieldValue.increment(-totalCost),
         });
+        cardIds = recordCards(tx, userRef, cards, pid);
       });
     } else {
-      // ===== 確率方式（パック2〜4。今は未使用）=====
       await db.runTransaction(async (tx) => {
         const userSnap = await tx.get(userRef);
         if (!userSnap.exists) throw { code: "no-user" };
@@ -155,16 +167,17 @@ export default async function handler(req, res) {
           coins: FieldValue.increment(-totalCost),
           totalIssued: FieldValue.increment(-totalCost),
         });
+        cardIds = recordCards(tx, userRef, cards, pid);
       });
     }
 
-    // 最新の残高を返す（フロントは表示するだけ）
     const after = await userRef.get();
     return res.status(200).json({
       ok: true,
       cards,
       coins: after.data().coins,
-      remaining, // デッキパックのみ数値、それ以外は null
+      remaining,
+      cardIds,
     });
   } catch (err) {
     const map = {

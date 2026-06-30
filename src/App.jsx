@@ -2207,6 +2207,17 @@ useEffect(()=>{
 
   const drawPack1Card = (idx) => deck1[idx] || {name:"なにかのRRカード",rarity:"RR",image:"🎴",prizeRank:"ハズレ"};
 
+  const serverRedeem = async (cardIds) => {
+    const ids=(cardIds||[]).filter(Boolean);
+    if(ids.length===0){notify("還元できません");return null;}
+    const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+    if(!idToken){notify("ログインが必要です");return null;}
+    const res = await fetch("/api/redeem",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken,cardIds:ids})});
+    const data = await res.json();
+    if(!res.ok){notify(data.error||"還元に失敗しました");return null;}
+    return data;
+  };
+
   const doDraw=(pack)=>requirePurchase(async()=>{
     if(remainings[pack.id]<=0){notify("残り口数がありません");return;}
     if(coins<pack.price){notify(`コインが足りません 🪙 (必要: ${pack.price.toLocaleString()})`);return;}
@@ -2222,7 +2233,7 @@ useEffect(()=>{
     if(typeof result.coins==="number")setCoins(result.coins);
     if(typeof result.remaining==="number")setRemainingMap(prev=>({...prev,[pack.id]:result.remaining}));
     const newRemaining=typeof result.remaining==="number"?result.remaining:Math.max(0,remainings[pack.id]-1);
-    const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize};
+    const cardWithPrize={...card,packName:pack.name,date:new Date().toLocaleTimeString(),prize,cardId:result.cardIds&&result.cardIds[0]};
     const singleMulti={cards:[cardWithPrize],pack:{...pack,remaining:newRemaining}};
     setPendingCards(prev=>[...prev,cardWithPrize]);
     setReveal(card);
@@ -2249,7 +2260,7 @@ useEffect(()=>{
     const multi={cards,pack:snap};
     const RO={"1等":0,"2等":1,"3等":2,"4等":3,"ハズレ":4};
     const winners=cards.map((c,i)=>({card:c,prize:prizes[i]})).filter(x=>x.prize&&x.prize.rank!=="ハズレ"&&x.prize.rank!=="4等").sort((a,b)=>(RO[a.prize.rank]??99)-(RO[b.prize.rank]??99));
-    const cardsWithPrize=cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString()+'_'+i,prize:prizes[i]}));
+    const cardsWithPrize=cards.map((c,i)=>({...c,packName:pack.name,date:new Date().toLocaleTimeString()+'_'+i,prize:prizes[i],cardId:result.cardIds&&result.cardIds[i]}));
     setPendingCards(prev=>[...prev,...cardsWithPrize]);
     setReveal(winners.length>0?winners[0].card:cards[0]);
     setRevealPack({...snap,_afterMulti:{...multi,cards:cardsWithPrize}});
@@ -2434,11 +2445,14 @@ useEffect(()=>{
           notify(`${checkedIdx.size}枚の発送申請を受け付けました 📦`);
           setMultiReveal(null);
         }}
-        onRedeem={(amount,checkedIdx,allCards)=>{
+        onRedeem={async(amount,checkedIdx,allCards)=>{
           const redeemed=allCards.filter((_,i)=>checkedIdx.has(i));
+          const ids=redeemed.map(c=>c.cardId);
+          const result=await serverRedeem(ids);
+          if(!result){return;}
           setPendingCards(p=>p.filter(c=>!redeemed.some(r=>r.date===c.date)));
-          if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}
-          notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
+          setCoins(result.coins);
+          notify(`+${result.gained.toLocaleString()}コイン 還元しました！🪙`);
           setMultiReveal(null);
         }}
       />}
@@ -2476,11 +2490,12 @@ useEffect(()=>{
                     </div>
                     {rank!=="ハズレ"&&<div style={{display:"inline-block",background:rank==="1等"?"linear-gradient(135deg,#ffd700,#ff9020)":rank==="2等"?"linear-gradient(135deg,#ffd700,#b8860b)":"linear-gradient(135deg,#60b8ff,#1a5fc8)",borderRadius:20,padding:"2px 10px",color:"#000",fontWeight:900,fontSize:11}}>{rank}</div>}
                   </div>
-                  <button onClick={()=>{
-                    const amount=parseInt(coinVal.replace(/,/g,""))||0;
-                    if(!isGuest&&user){setDoc(doc(db,"users",user.id),{coins:increment(amount),totalIssued:increment(amount)},{merge:true});}else{setCoins(c=>c+amount);}
+                  <button onClick={async()=>{
+                    const result=await serverRedeem([c.cardId]);
+                    if(!result){return;}
                     setPendingCards(p=>p.filter((_,j)=>j!==i));
-                    notify(`+${amount.toLocaleString()}コイン 還元しました！🪙`);
+                    setCoins(result.coins);
+                    notify(`+${result.gained.toLocaleString()}コイン 還元しました！🪙`);
                   }} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>還元</button>
                 </div>
               );
@@ -2488,15 +2503,13 @@ useEffect(()=>{
           </div>
           {pendingCards.length>0&&(
             <div style={{background:"#fff",borderTop:"1px solid #eee",padding:"16px 20px 28px",flexShrink:0}}>
-              <button onClick={()=>{
-                const total=pendingCards.reduce((s,c)=>{
-                  const rank=c.prizeRank||"ハズレ";
-                  const v=rank==="1等"?10000:rank==="2等"?2000:rank==="3等"?1000:1;
-                  return s+v;
-                },0);
-                setCoins(c=>c+total);
+              <button onClick={async()=>{
+                const ids=pendingCards.map(c=>c.cardId);
+                const result=await serverRedeem(ids);
+                if(!result){return;}
+                setCoins(result.coins);
                 setPendingCards([]);
-                notify(`+${total.toLocaleString()}コイン 全て還元しました！🪙`);
+                notify(`+${result.gained.toLocaleString()}コイン 全て還元しました！🪙`);
                 setShowPendingCards(false);
               }} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"16px",borderRadius:30,fontWeight:900,fontSize:16,cursor:"pointer"}}>
                 全て還元する（{pendingCards.length}枚）
