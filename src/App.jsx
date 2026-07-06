@@ -2099,6 +2099,7 @@ export default function App(){
   // 未ログインは自動的にゲスト扱い
   const isGuest = !user || user.isGuest;
   const [isAdmin,setIsAdmin]=useState(false);
+  const [adminUnlocked,setAdminUnlocked]=useState(false);
   useEffect(()=>{
     if(!user||isGuest)return;
     getDoc(doc(db,"admins",user.id)).then(d=>{if(d.exists())setIsAdmin(true);else setIsAdmin(false);});
@@ -2541,7 +2542,18 @@ useEffect(()=>{
 
       {/* 管理者ボタン（右下固定） */}
       {isAdmin&&(
-        <button onClick={()=>setShowAdminPanel(true)} style={{position:"fixed",bottom:80,right:16,zIndex:500,background:"#1a1a2a",border:"1px solid #333",color:"#ffd700",borderRadius:"50%",width:44,height:44,fontSize:18,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <button onClick={async()=>{
+          if(adminUnlocked){setShowAdminPanel(true);return;}
+          const pw=window.prompt("管理者パスワードを入力してください");
+          if(!pw)return;
+          const idToken=auth.currentUser?await auth.currentUser.getIdToken():null;
+          if(!idToken){notify("ログインが必要です");return;}
+          const res=await fetch("/api/admin-auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken,password:pw})});
+          const data=await res.json();
+          if(!res.ok){notify(data.error||"認証に失敗しました");return;}
+          setAdminUnlocked(true);
+          setShowAdminPanel(true);
+        }} style={{position:"fixed",bottom:80,right:16,zIndex:500,background:"#1a1a2a",border:"1px solid #333",color:"#ffd700",borderRadius:"50%",width:44,height:44,fontSize:18,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
           ⚙️
         </button>
       )}
