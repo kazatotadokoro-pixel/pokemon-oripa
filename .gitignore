@@ -4,3 +4,4 @@ node_modules/
 *.json.key
 serviceAccount*.json
 firebase-adminsdk*.json
+*.bak

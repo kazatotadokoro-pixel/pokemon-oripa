@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
-import charMushroom from "./assets/char_mushroom.webp";
-import charFish from "./assets/char_fish.webp";
 
 const REAL_CARDS = {
   sar: [
@@ -119,6 +117,140 @@ function SantouCard({size=140, showText=true}){
   );
 }
 
+// ===== GachaBall（ボール昇格演出パーツ） =====
+// 権利的に安全なCSS描画の球体。ポケモン公式ボール画像は使わず、それっぽい配色の抽象デザインにする
+const BALL_TYPES=["monster","super","hyper","master"];
+const BALL_STYLE={
+  monster:{top:"#ee2a2a",bottom:"#fdfdfd",band:"#1a1a1a",glow:"rgba(238,42,42,0.55)",name:"モンスターボール"},
+  super:{top:"linear-gradient(90deg,#2f6fe0 50%,#e0342a 50%)",bottom:"#fdfdfd",band:"#1a1a1a",glow:"rgba(47,111,224,0.6)",name:"スーパーボール"},
+  hyper:{top:"#1a1a1a",bottom:"#f2c200",band:"#f2c200",glow:"rgba(242,194,0,0.6)",name:"ハイパーボール"},
+  master:{top:"linear-gradient(90deg,#8a2fbf 55%,#e85ec0 55%)",bottom:"#2a2a2a",band:"#e85ec0",glow:"rgba(138,47,191,0.8)",name:"マスターボール"},
+};
+
+function GachaBall({type,size=190,shaking,opening}){
+  const s=BALL_STYLE[type];
+  return(
+    <div style={{position:"relative",width:size,height:size,borderRadius:"50%",overflow:"hidden",
+      boxShadow:`0 0 ${Math.round(size*0.32)}px ${s.glow},0 ${Math.round(size*0.08)}px ${Math.round(size*0.2)}px rgba(0,0,0,0.55)`,
+      border:`${Math.max(2,Math.round(size*0.016))}px solid #111`,
+      animation:opening?"ballBurstScale 0.55s ease-in forwards":shaking?"ballShake 0.32s ease-in-out infinite":"ballIdle 2.2s ease-in-out infinite"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:"48%",background:s.top}}/>
+      <div style={{position:"absolute",bottom:0,left:0,right:0,height:"48%",background:s.bottom}}/>
+      <div style={{position:"absolute",top:"46%",left:0,right:0,height:"8%",background:s.band}}/>
+      <div style={{position:"absolute",top:"50%",left:"50%",width:size*0.24,height:size*0.24,marginLeft:-size*0.12,marginTop:-size*0.12,borderRadius:"50%",background:"#fff",border:`${Math.max(2,Math.round(size*0.02))}px solid ${s.band}`,boxShadow:"inset 0 -2px 5px rgba(0,0,0,0.25)"}}/>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:"32%",background:"linear-gradient(180deg,rgba(255,255,255,0.5),transparent)",pointerEvents:"none"}}/>
+    </div>
+  );
+}
+
+// 開始ボールの抽選: 最終ランク(finalIndex)から見て、どのボールから始まるか
+// finalIndex: 0=モンスター 1=スーパー 2=ハイパー 3=マスター
+function pickStartBallIndex(finalIndex){
+  const r=Math.random();
+  if(finalIndex===3){        // 1等(マスター終着) モンスター50/スーパー30/ハイパー20
+    if(r<0.50) return 0;
+    if(r<0.80) return 1;
+    return 2;
+  }
+  if(finalIndex===2){        // 2等(ハイパー終着) モンスター60/スーパー30/ハイパー10
+    if(r<0.60) return 0;
+    if(r<0.90) return 1;
+    return 2;
+  }
+  if(finalIndex===1){        // 3等(スーパー終着) モンスター90/スーパー10
+    return r<0.90?0:1;
+  }
+  return 0;                  // 4等以下: モンスター開始のみ、昇格なし
+}
+
+// ===== BallReveal: ボール昇格演出 =====
+function BallReveal({rankNum,onDone}){
+  const finalIndex=rankNum===1?3:rankNum===2?2:rankNum===3?1:0;
+  const startIndex=useMemo(()=>pickStartBallIndex(finalIndex),[finalIndex]);
+  const sequence=useMemo(()=>{
+    const seq=[];
+    for(let i=startIndex;i<=finalIndex;i++)seq.push(i);
+    return seq;
+  },[startIndex,finalIndex]);
+
+  const [step,setStep]=useState(0);         // sequence内の現在位置
+  const [stage,setStage]=useState("drop");  // drop → shake → promote → shake … → open
+  const timers=useRef([]);
+  const doneRef=useRef(false);
+
+  useEffect(()=>{
+    const ts=[];
+    let t=550; // ドロップ着地までの時間
+    ts.push(setTimeout(()=>setStage("shake"),t));
+    sequence.forEach((idx,i)=>{
+      const isLast=i===sequence.length-1;
+      if(!isLast){
+        t+=1500; // 揺れる時間(1段階あたり約1.5〜2秒)
+        ts.push(setTimeout(()=>setStage("promote"),t));
+        t+=550;
+        ts.push(setTimeout(()=>{setStep(i+1);setStage("shake");},t));
+      }else{
+        t+=1500;
+        ts.push(setTimeout(()=>setStage("open"),t));
+        t+=850;
+        ts.push(setTimeout(()=>{if(!doneRef.current){doneRef.current=true;onDone();}},t));
+      }
+    });
+    timers.current=ts;
+    return()=>ts.forEach(clearTimeout);
+  },[]);
+
+  const skip=()=>{
+    timers.current.forEach(clearTimeout);
+    if(!doneRef.current){doneRef.current=true;onDone();}
+  };
+
+  const curIdx=sequence[Math.min(step,sequence.length-1)];
+  const ball=BALL_TYPES[curIdx];
+  const s=BALL_STYLE[ball];
+  const nextIdx=step+1<sequence.length?sequence[step+1]:null;
+  const nextS=stage==="promote"&&nextIdx!==null?BALL_STYLE[BALL_TYPES[nextIdx]]:null;
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",background:stage==="open"?"#fff":"radial-gradient(ellipse 80% 70% at 50% 62%,#1a1a26,#050508)",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.4s"}}>
+      <style>{`
+        @keyframes ballDropIn{0%{transform:translateY(-280px) scale(0.6);opacity:0}70%{transform:translateY(14px) scale(1.06);opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
+        @keyframes ballIdle{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-6px) rotate(-2deg)}}
+        @keyframes ballShake{0%,100%{transform:translate(0,0) rotate(0deg)}20%{transform:translate(-9px,0) rotate(-9deg)}40%{transform:translate(8px,0) rotate(8deg)}60%{transform:translate(-7px,0) rotate(-7deg)}80%{transform:translate(6px,0) rotate(6deg)}}
+        @keyframes ballBurstScale{0%{transform:scale(1);opacity:1}55%{transform:scale(1.5);opacity:1}100%{transform:scale(2.4);opacity:0}}
+        @keyframes ballPromoteFlash{0%{opacity:0;transform:scale(0.4)}45%{opacity:1;transform:scale(1.3)}100%{opacity:0;transform:scale(2.1)}}
+        @keyframes ballGroundGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:0.9;transform:scale(1.15)}}
+        @keyframes ballOpenRay{0%{opacity:0;transform:scaleY(0.5)}50%{opacity:1;transform:scaleY(1.25)}100%{opacity:0;transform:scaleY(0.9)}}
+        @keyframes ballNamePop{0%{transform:scale(0.7);opacity:0}100%{transform:scale(1);opacity:1}}
+      `}</style>
+
+      {stage!=="open"&&(
+        <div style={{position:"absolute",left:"50%",bottom:"28%",width:300,height:90,marginLeft:-150,borderRadius:"50%",background:`radial-gradient(ellipse,${s.glow},transparent 70%)`,filter:"blur(6px)",animation:"ballGroundGlow 1.6s ease-in-out infinite",transition:"background 0.4s"}}/>
+      )}
+
+      {stage==="open"&&(
+        <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
+          {[...Array(14)].map((_,i)=><div key={i} style={{position:"absolute",left:"50%",top:"50%",width:6,height:"75vh",marginLeft:-3,marginTop:"-37vh",transformOrigin:"center",transform:`rotate(${i*(360/14)}deg)`,background:`linear-gradient(to top,transparent,${s.glow})`,animation:`ballOpenRay 0.8s ease-out ${i*0.02}s both`}}/>)}
+        </div>
+      )}
+
+      <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:26}}>
+        <div style={{position:"relative",animation:stage==="drop"?"ballDropIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both":undefined}}>
+          <GachaBall type={ball} size={190} shaking={stage==="shake"} opening={stage==="open"}/>
+          {stage==="promote"&&nextS&&(
+            <div style={{position:"absolute",left:"50%",top:"50%",width:280,height:280,marginLeft:-140,marginTop:-140,borderRadius:"50%",background:`radial-gradient(circle,#fff,${nextS.glow},transparent 70%)`,animation:"ballPromoteFlash 0.55s ease-out both",pointerEvents:"none"}}/>
+          )}
+        </div>
+        <div key={ball} style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:22,color:"#fff",letterSpacing:3,textShadow:`0 0 20px ${s.glow}`,opacity:stage==="open"?0:1,transition:"opacity 0.3s",animation:"ballNamePop 0.3s ease-out both"}}>
+          {s.name}
+        </div>
+      </div>
+
+      <button onClick={skip} style={{position:"absolute",bottom:36,right:36,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",padding:"8px 22px",borderRadius:30,fontSize:12,cursor:"pointer",zIndex:10,fontFamily:"'Noto Sans JP',sans-serif"}}>スキップ →</button>
+    </div>
+  );
+}
+
 // ===== CardReveal =====
 function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   const prize=card.prizeRank
@@ -133,117 +265,30 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
     :rankNum===4?{bg:"linear-gradient(135deg,#001040,#2266ff,#88aaff,#2266ff,#001040)",border:"#2266ff",glow:"rgba(34,102,255,0.6)",label:"4等",shimmer:false,rainbow:false}
     :{bg:"linear-gradient(135deg,#111,#444,#888,#444,#111)",border:"#555",glow:"rgba(100,100,100,0.3)",label:"ハズレ",shimmer:false,rainbow:false};
 
-  const [phase,setPhase]=useState("countdown");
-  const [count,setCount]=useState(3);
+  const [phase,setPhase]=useState("ball"); // ball(ボール昇格演出) → card(登場) → done(結果)
   const [revealed,setRevealed]=useState(!isPuchun);
   const [tilt,setTilt]=useState({x:0,y:0});
-  // オーラ昇格演出: 期待度を色で段階表現する(青→緑→赤→金→虹)
-  // rankNumが高い当たりほど、最終的に上位の色まで昇格する
-  const auraTarget=rankNum===1?5:rankNum===2?4:rankNum===3?3:rankNum===4?2:1;
-  const [auraLevel,setAuraLevel]=useState(1);
-  const [chance,setChance]=useState(false); // チャンス予告(激アツサイン)
-  const [promote,setPromote]=useState(false); // 昇格の瞬間フラッシュ
   const cardRef=useRef(null);
-  const timers=useRef([]);
-  const AURA=[null,
-    {c:"#2266ff",g:"rgba(34,102,255,0.7)",name:"青"},
-    {c:"#22cc66",g:"rgba(34,204,102,0.7)",name:"緑"},
-    {c:"#ff2244",g:"rgba(255,34,68,0.8)",name:"赤"},
-    {c:"#ffd700",g:"rgba(255,215,0,0.9)",name:"金"},
-    {c:"#ff66cc",g:"rgba(255,102,204,0.95)",name:"虹",rainbow:true},
-  ];
-  const aura=AURA[auraLevel];
-  // クライマックス演出を出すかどうか(高レア = 金/虹到達ランク)
-  const isClimax=auraTarget>=4;
-  // 登場キャラ: 1等はキノコ(赤系の決め演出)、2等は魚(青系)。色も対応させる
-  const climaxChar=rankNum===1?{img:charMushroom,glow:"rgba(255,90,120,0.9)",label:"開眼"}:{img:charFish,glow:"rgba(80,180,255,0.9)",label:"覚醒"};
-  // 中央へ集まる光の粒(収束演出)。出発点をランダムに散らす
-  const convergePts=useMemo(()=>[...Array(isClimax?36:0)].map((_,i)=>({
-    id:i,
-    fx:(Math.random()*2-1)*60+"vw",
-    fy:(Math.random()*2-1)*60+"vh",
-    size:4+Math.random()*8,
-    dur:0.9+Math.random()*0.7,
-    delay:Math.random()*0.8,
-  })),[isClimax]);
-  // クライマックスで舞い上がる金パーティクル
-  const goldRise=useMemo(()=>[...Array(isClimax?30:0)].map((_,i)=>({
-    id:i,x:Math.random()*100,size:3+Math.random()*7,dur:1.6+Math.random()*1.8,delay:Math.random()*1.5,
-  })),[isClimax]);
-  // 確定時の紙吹雪
+  const cardTimers=useRef([]);
+  useEffect(()=>()=>cardTimers.current.forEach(clearTimeout),[]);
+
+  const pts=useMemo(()=>[...Array(rankNum>=1&&rankNum<=3?40:0)].map((_,i)=>({id:i,x:Math.random()*100,y:50+Math.random()*50,size:2+Math.random()*5,dur:1.2+Math.random()*2,delay:Math.random()*1.5})),[rankNum]);
+  const stars=useMemo(()=>[...Array(rankNum<=2?20:0)].map((_,i)=>({id:i,x:5+Math.random()*90,y:5+Math.random()*90,s:10+Math.random()*14,dur:0.8+Math.random()*1.2,delay:Math.random()*2})),[rankNum]);
   const confetti=useMemo(()=>[...Array(rankNum<=2?50:0)].map((_,i)=>({
     id:i,x:Math.random()*100,size:6+Math.random()*8,dur:2+Math.random()*2,delay:Math.random()*1.2,
     col:rankNum===1?`hsl(${Math.random()*360},90%,60%)`:`hsl(${40+Math.random()*15},95%,${55+Math.random()*15}%)`,
   })),[rankNum]);
 
-  const skip=()=>{timers.current.forEach(clearTimeout);setPhase("done");};
-
-  useEffect(()=>{
-    // オーラ昇格: カウントダウンの進行に合わせて、目標レベルまで段階的に色を上げる
-    // 各昇格時に画面を一瞬フラッシュさせて「昇格した!」という驚きを作る
-    const auraTimers=[];
-    for(let lv=2;lv<=auraTarget;lv++){
-      const t=1200+(lv-1)*1700+Math.random()*400;
-      auraTimers.push(setTimeout(()=>{
-        setAuraLevel(lv);
-        setPromote(true);
-        setTimeout(()=>setPromote(false),420);
-      },t));
-    }
-    // チャンス予告: 高レア(2等以上)のとき、確率で激アツサインを表示
-    if(auraTarget>=4&&Math.random()<0.75){
-      auraTimers.push(setTimeout(()=>{
-        setChance(true);
-        setTimeout(()=>setChance(false),1600);
-      },2200));
-    }
-    timers.current.push(...auraTimers);
-
-    if(isPuchun){
-      const r=Math.random();
-      const cutAt=r<0.2?3:r<0.8?2:1;
-      const starts={3:0,2:3000,1:6000};
-      const delay=starts[cutAt]+1000+Math.random()*1500;
-      const ts=[];
-      if(cutAt<=2)ts.push(setTimeout(()=>setCount(2),3000));
-      if(cutAt<=1)ts.push(setTimeout(()=>setCount(1),6000));
-      ts.push(setTimeout(()=>setPhase("puchun_cut"),delay));
-      ts.push(setTimeout(()=>setPhase("puchun_slam"),delay+600));
-      ts.push(setTimeout(()=>setPhase("done"),delay+2800));
-      timers.current.push(...ts);
-    }else if(isClimax){
-      // 高レア専用タイムライン: 静か→収束→金強化→クライマックス→白フラッシュ→結果
-      const ts=[
-        setTimeout(()=>setCount(2),2600),
-        setTimeout(()=>setCount(1),5000),
-        setTimeout(()=>setPhase("converge"),6600),   // 光が中央に集まる
-        setTimeout(()=>setPhase("climax"),7600),      // 金色コア炸裂・最高潮
-        setTimeout(()=>setPhase("flash"),9000),       // 全画面白フラッシュ
-        setTimeout(()=>setPhase("card"),9300),
-        setTimeout(()=>setPhase("done"),10000),
-      ];
-      timers.current.push(...ts);
-    }else{
-      const ts=[
-        setTimeout(()=>setCount(2),3000),
-        setTimeout(()=>setCount(1),6000),
-        setTimeout(()=>setPhase("flash"),9000),
-        setTimeout(()=>setPhase("card"),9350),
-        setTimeout(()=>setPhase("done"),10100),
-      ];
-      timers.current.push(...ts);
-    }
-    return()=>timers.current.forEach(clearTimeout);
-  },[]);
-
-  const pts=useMemo(()=>[...Array(rankNum>=1&&rankNum<=3?40:0)].map((_,i)=>({id:i,x:Math.random()*100,y:50+Math.random()*50,size:2+Math.random()*5,dur:1.2+Math.random()*2,delay:Math.random()*1.5})),[rankNum]);
-  const stars=useMemo(()=>[...Array(rankNum<=2?20:0)].map((_,i)=>({id:i,x:5+Math.random()*90,y:5+Math.random()*90,s:10+Math.random()*14,dur:0.8+Math.random()*1.2,delay:Math.random()*2})),[rankNum]);
+  if(phase==="ball"){
+    return <BallReveal rankNum={rankNum} onDone={()=>{
+      setPhase("card");
+      cardTimers.current.push(setTimeout(()=>setPhase("done"),750));
+    }}/>;
+  }
 
   return(
-    <div style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",background:phase==="flash"?"#fff":phase==="countdown"?`radial-gradient(ellipse 80% 80% at 50% 60%,${aura.c}22,#000)`:phase==="puchun_cut"?"#fff":"rgba(4,4,14,0.99)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"background 0.5s"}}>
+    <div style={{position:"fixed",inset:0,zIndex:2000,overflow:"hidden",background:"rgba(4,4,14,0.99)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
       <style>{`
-        @keyframes cd-pop{0%{transform:scale(2.5);opacity:0;filter:blur(12px)}40%{transform:scale(0.88);opacity:1;filter:blur(0)}100%{transform:scale(1);opacity:1}}
-        @keyframes cd-ring{0%{transform:scale(0.4);opacity:1}100%{transform:scale(2.4);opacity:0}}
         @keyframes gp{0%,100%{opacity:0.55;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
         @keyframes cdrop{0%{transform:translateY(-120px) scale(0.7) rotateX(40deg);opacity:0}60%{transform:translateY(12px) scale(1.04) rotateX(-4deg);opacity:1}80%{transform:translateY(-6px) scale(0.98)}100%{transform:translateY(0) scale(1) rotateX(0);opacity:1}}
         @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
@@ -252,103 +297,10 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
         @keyframes shim{0%{background-position:200% center}100%{background-position:-200% center}}
         @keyframes pup{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-200px) scale(0);opacity:0}}
         @keyframes stw{0%,100%{opacity:0;transform:scale(0)}50%{opacity:1;transform:scale(1)}}
-        @keyframes pcup{0%{transform:translateY(110%) scale(0.85);opacity:0}55%{transform:translateY(-8%) scale(1.03);opacity:1}75%{transform:translateY(3%) scale(0.98)}100%{transform:translateY(0) scale(1);opacity:1}}
-        @keyframes spline{0%{transform:scaleX(0);opacity:1}100%{transform:scaleX(1);opacity:0}}
-        @keyframes shake{0%,100%{transform:translate(0,0)}10%{transform:translate(-14px,-6px)}25%{transform:translate(12px,8px)}40%{transform:translate(-9px,-10px)}55%{transform:translate(10px,6px)}70%{transform:translate(-6px,-4px)}}
-        @keyframes pglow{0%{transform:scale(0.3);opacity:1}100%{transform:scale(3);opacity:0}}
         @keyframes halo{0%{transform:scale(1);opacity:0.7}100%{transform:scale(2.2);opacity:0}}
-        @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
-        @keyframes promoflash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
-        @keyframes chancein{0%{transform:translateX(-50%) scale(0) rotate(-10deg);opacity:0}60%{transform:translateX(-50%) scale(1.25) rotate(3deg);opacity:1}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
-        @keyframes converge{0%{transform:translate(var(--fx),var(--fy)) scale(1);opacity:0}25%{opacity:1}100%{transform:translate(0,0) scale(0.2);opacity:1}}
-        @keyframes coreGrow{0%{transform:scale(0.1);opacity:0;filter:blur(8px) brightness(1)}55%{opacity:1}100%{transform:scale(1.15);opacity:1;filter:blur(2px) brightness(2.2)}}
-        @keyframes corePulse{0%,100%{transform:scale(1);filter:brightness(1.6)}50%{transform:scale(1.12);filter:brightness(2.6)}}
-        @keyframes flareRot{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        @keyframes flareRay{0%,100%{opacity:0.35;transform:scaleY(0.9)}50%{opacity:0.9;transform:scaleY(1.15)}}
-        @keyframes goldRise{0%{transform:translateY(0) scale(1);opacity:0}15%{opacity:1}100%{transform:translateY(-95vh) scale(0.2);opacity:0}}
-        @keyframes camShake{0%,100%{transform:translate(0,0)}15%{transform:translate(-8px,5px)}30%{transform:translate(7px,-6px)}45%{transform:translate(-6px,-4px)}60%{transform:translate(6px,5px)}75%{transform:translate(-4px,3px)}}
-        @keyframes camShakeHard{0%,100%{transform:translate(0,0) rotate(0)}10%{transform:translate(-16px,8px) rotate(-0.6deg)}25%{transform:translate(14px,-10px) rotate(0.5deg)}40%{transform:translate(-12px,-8px) rotate(-0.4deg)}55%{transform:translate(13px,9px) rotate(0.5deg)}70%{transform:translate(-8px,5px) rotate(-0.3deg)}85%{transform:translate(6px,-4px)}}
-        @keyframes climaxBg{0%{background:radial-gradient(circle at 50% 50%,#1a1200,#000)}100%{background:radial-gradient(circle at 50% 50%,#5a4200,#1a0e00)}}
-        @keyframes textPop{0%{transform:translateX(-50%) scale(0);opacity:0;filter:blur(6px)}50%{transform:translateX(-50%) scale(1.18)}70%{transform:translateX(-50%) scale(0.95)}100%{transform:translateX(-50%) scale(1);opacity:1;filter:blur(0)}}
-        @keyframes whiteOut{0%{opacity:0}40%{opacity:1}100%{opacity:1}}
-        @keyframes ggShimmer{0%{background-position:0% center}100%{background-position:200% center}}
         @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0.4}}
-        @keyframes charIn{0%{transform:translate(-50%,40px) scale(0.4);opacity:0;filter:blur(8px)}55%{transform:translate(-50%,-12px) scale(1.12);opacity:1;filter:blur(0)}75%{transform:translate(-50%,4px) scale(0.97)}100%{transform:translate(-50%,0) scale(1);opacity:1}}
-        @keyframes charFloat{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-10px)}}
-        @keyframes charGlow{0%,100%{filter:drop-shadow(0 0 18px var(--cg)) drop-shadow(0 0 36px var(--cg))}50%{filter:drop-shadow(0 0 32px var(--cg)) drop-shadow(0 0 64px var(--cg)) brightness(1.15)}}
       `}</style>
 
-      {phase==="countdown"&&(
-        <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:"100%"}}>
-          {/* 画面下から立ち上るオーラ(色=期待度) */}
-          <div style={{position:"absolute",bottom:0,left:0,right:0,height:"70%",background:`linear-gradient(0deg,${aura.c}55,${aura.c}22 40%,transparent)`,animation:aura.rainbow?"rainbow 1.5s linear infinite":"none",pointerEvents:"none",transition:"background 0.5s"}}/>
-          {/* 立ち上る光の粒 */}
-          {[...Array(auraLevel*5)].map((_,i)=><div key={i} style={{position:"absolute",bottom:0,left:`${(i*7+10)%90+5}%`,width:3+Math.random()*4,height:3+Math.random()*4,borderRadius:"50%",background:aura.rainbow?`hsl(${i*30},100%,65%)`:aura.c,boxShadow:`0 0 8px ${aura.g}`,animation:`pup ${1.2+Math.random()*1.5}s ease-out ${Math.random()*1.5}s infinite`,pointerEvents:"none"}}/>)}
-          <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${aura.c}33,transparent 70%)`,animation:"gp 0.9s ease-in-out infinite",pointerEvents:"none",transition:"background 0.5s"}}/>
-          {[0,0.3,0.6].map((d,i)=><div key={i} style={{position:"absolute",width:260,height:260,borderRadius:"50%",border:`3px solid ${aura.c}`,animation:`cd-ring 1s ease-out ${d}s infinite`,pointerEvents:"none",transition:"border-color 0.5s"}}/>)}
-          {/* 昇格の瞬間の白フラッシュ */}
-          {promote&&<div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.55)",animation:"promoflash 0.42s ease-out both",pointerEvents:"none",zIndex:5}}/>}
-          {/* チャンス予告(激アツサイン) */}
-          {chance&&(
-            <div style={{position:"absolute",top:"22%",left:"50%",transform:"translateX(-50%)",zIndex:8,animation:"chancein 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both",pointerEvents:"none"}}>
-              <div style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:46,color:"#ffd700",textShadow:"0 0 30px rgba(255,215,0,1),0 0 60px rgba(255,140,0,0.8)",letterSpacing:4,whiteSpace:"nowrap"}}>★ CHANCE ★</div>
-            </div>
-          )}
-          <button onClick={skip} style={{position:"absolute",bottom:36,right:36,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",padding:"8px 22px",borderRadius:30,fontSize:12,cursor:"pointer",zIndex:10,fontFamily:"'Noto Sans JP',sans-serif"}}>スキップ →</button>
-          <div key={count} style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:220,lineHeight:1,color:aura.c,textShadow:`0 0 60px ${aura.g},0 0 120px ${aura.g}`,animation:"cd-pop 0.55s cubic-bezier(0.175,0.885,0.32,1.275) both",userSelect:"none",zIndex:2,transition:"color 0.5s"}}>{count}</div>
-        </div>
-      )}
-
-      {phase==="converge"&&(
-        <div style={{position:"absolute",inset:0,overflow:"hidden",background:"radial-gradient(circle at 50% 50%,#1a1200,#000)",animation:"camShake 0.6s ease-in-out infinite"}}>
-          {/* 中央へ集まる金色の光の粒 */}
-          {convergePts.map(p=><div key={p.id} style={{position:"absolute",left:"50%",top:"50%",width:p.size,height:p.size,borderRadius:"50%",background:"#ffe680",boxShadow:"0 0 12px #ffd700,0 0 24px #ffae00","--fx":p.fx,"--fy":p.fy,animation:`converge ${p.dur}s cubic-bezier(0.5,0,0.7,0) ${p.delay}s forwards`,pointerEvents:"none"}}/>)}
-          {/* 中央のコア(集まってきた光が溜まる) */}
-          <div style={{position:"absolute",left:"50%",top:"50%",width:120,height:120,marginLeft:-60,marginTop:-60,borderRadius:"50%",background:"radial-gradient(circle,#fff,#ffd700 40%,transparent 70%)",filter:"blur(2px)",animation:"coreGrow 1s ease-in forwards",pointerEvents:"none"}}/>
-        </div>
-      )}
-
-      {phase==="climax"&&(
-        <div style={{position:"absolute",inset:0,overflow:"hidden",animation:`${rankNum===1?"camShakeHard 0.5s":"camShake 0.5s"} ease-in-out infinite,climaxBg 1.4s ease-out forwards`}}>
-          {/* レンズフレア: 回転する光線 */}
-          <div style={{position:"absolute",left:"50%",top:"50%",width:"200vmax",height:"200vmax",marginLeft:"-100vmax",marginTop:"-100vmax",animation:"flareRot 6s linear infinite",pointerEvents:"none"}}>
-            {[...Array(16)].map((_,i)=><div key={i} style={{position:"absolute",left:"50%",top:0,width:i%2===0?6:2,height:"50%",transformOrigin:"bottom center",transform:`translateX(-50%) rotate(${i*22.5}deg)`,background:`linear-gradient(to top,${rankNum===1?"rgba(255,160,255,0)":"rgba(255,215,0,0)"},${rankNum===1?"rgba(255,180,255,0.85)":"rgba(255,225,120,0.85)"})`,animation:`flareRay ${1.2+i*0.05}s ease-in-out infinite`}}/>)}
-          </div>
-          {/* Bloom発光コア(多層) */}
-          <div style={{position:"absolute",left:"50%",top:"50%",width:420,height:420,marginLeft:-210,marginTop:-210,borderRadius:"50%",background:`radial-gradient(circle,#fff,${rankNum===1?"#ffccff":"#ffd700"} 35%,transparent 70%)`,filter:"blur(14px)",animation:"corePulse 0.8s ease-in-out infinite",pointerEvents:"none"}}/>
-          <div style={{position:"absolute",left:"50%",top:"50%",width:200,height:200,marginLeft:-100,marginTop:-100,borderRadius:"50%",background:"radial-gradient(circle,#fff,#fff6c8 50%,transparent 72%)",filter:"blur(4px)",animation:"corePulse 0.8s ease-in-out infinite",pointerEvents:"none"}}/>
-          {/* 舞い上がる金パーティクル */}
-          {goldRise.map(p=><div key={p.id} style={{position:"absolute",bottom:0,left:`${p.x}%`,width:p.size,height:p.size,borderRadius:"50%",background:rankNum===1?`hsl(${p.id*15},100%,70%)`:"#ffe680",boxShadow:`0 0 10px ${rankNum===1?"#ff88ff":"#ffd700"}`,animation:`goldRise ${p.dur}s ease-out ${p.delay}s infinite`,pointerEvents:"none"}}/>)}
-          {/* 期待度/確定テロップ */}
-          {rankNum<=2&&(
-            <img src={climaxChar.img} alt="" style={{position:"absolute",bottom:"6%",left:"50%",height:"58%",maxHeight:480,zIndex:9,"--cg":climaxChar.glow,animation:"charIn 0.7s cubic-bezier(0.175,0.885,0.32,1.275) 0.2s both,charFloat 2.4s ease-in-out 0.9s infinite,charGlow 1.6s ease-in-out 0.9s infinite",pointerEvents:"none",userSelect:"none"}}/>
-          )}
-          <div style={{position:"absolute",top:"30%",left:"50%",zIndex:10,animation:"textPop 0.6s cubic-bezier(0.175,0.885,0.32,1.275) 0.3s both",pointerEvents:"none",whiteSpace:"nowrap"}}>
-            <div style={{fontFamily:"'Cinzel',serif",fontWeight:900,fontSize:rankNum===1?52:40,letterSpacing:2,
-              background:rankNum===1?"linear-gradient(90deg,#ff4488,#ffd700,#44ff88,#44aaff,#ff4488)":"linear-gradient(90deg,#ffd700,#fff6c0,#ffae00,#ffd700)",
-              backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
-              filter:`drop-shadow(0 0 18px ${rankNum===1?"rgba(255,120,255,0.9)":"rgba(255,200,0,0.9)"})`,
-              animation:"ggShimmer 1.5s linear infinite"}}>
-              {rankNum===1?"★ 1等 確定!! ★":rankNum===2?"★ 期待度 MAX ★":"★ CHANCE ★"}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {phase==="flash"&&<div style={{position:"absolute",inset:0,background:"#fff",animation:"whiteOut 0.3s ease-out forwards"}}/>}
-
-      {phase==="puchun_cut"&&<div style={{position:"absolute",inset:0,background:"#fff"}}/>}
-
-      {phase==="puchun_slam"&&(
-        <div style={{position:"absolute",inset:0,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",animation:"shake 0.5s ease-out both",overflow:"hidden"}}>
-          {[...Array(24)].map((_,i)=><div key={i} style={{position:"absolute",left:"50%",top:"50%",width:"60vw",height:i%3===0?4:i%3===1?2:1,background:`linear-gradient(90deg,transparent,${cs.border}cc,${cs.border})`,transformOrigin:"left center",transform:`rotate(${i*15}deg)`,animation:`spline 0.35s ease-out ${i*0.005}s both`}}/>)}
-          <div style={{position:"absolute",width:"80vw",height:"80vw",borderRadius:"50%",background:`radial-gradient(circle,${cs.glow},transparent 65%)`,animation:"pglow 0.5s ease-out both",pointerEvents:"none"}}/>
-          <div style={{width:"min(68vw,340px)",height:"min(95vw,476px)",borderRadius:20,background:cs.bg,border:`4px solid ${cs.border}`,boxShadow:`0 0 60px ${cs.glow},0 0 120px ${cs.glow}`,animation:"pcup 0.55s cubic-bezier(0.22,1,0.36,1) both",position:"relative",overflow:"hidden",zIndex:10}}>
-            {cs.shimmer&&<div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,transparent 20%,rgba(255,255,255,0.3) 40%,rgba(255,255,255,0.08) 58%,transparent 75%)",backgroundSize:"300% 300%",animation:cs.rainbow?"rainbow 1.5s linear infinite,shim 2s linear infinite":"shim 2s linear infinite"}}/>}
-            <div style={{position:"absolute",top:0,left:0,right:0,height:"35%",background:"linear-gradient(180deg,rgba(255,255,255,0.15),transparent)",borderRadius:"18px 18px 0 0"}}/>
-          </div>
-        </div>
-      )}
 
       {(phase==="card"||phase==="done")&&(
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",position:"relative",width:"100%"}}>
