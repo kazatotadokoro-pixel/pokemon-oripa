@@ -1254,7 +1254,10 @@ function WinReportPage({user,isGuest,onRequireLogin}){
                 <button onClick={()=>likePost(post.id)} style={{background:"rgba(255,60,100,0.1)",border:"1px solid rgba(255,60,100,0.2)",borderRadius:20,padding:"6px 16px",color:"#ff6688",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
                   ❤️ {post.likes}
                 </button>
-                <button onClick={()=>{navigator.clipboard?.writeText(`【当選報告】${post.rank}当選！${post.cardName} #ポケモンオリパ`);}} style={{background:"rgba(29,161,242,0.1)",border:"1px solid rgba(29,161,242,0.2)",borderRadius:20,padding:"6px 16px",color:"#1DA1F2",fontSize:12,cursor:"pointer"}}>
+                <button onClick={()=>{
+                  const text=`【当選報告】${post.rank}当選！${post.cardName} #ポケモンオリパ #oripaluck\nhttps://oripaluck.jp`;
+                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,"_blank","noopener,noreferrer");
+                }} style={{background:"rgba(29,161,242,0.1)",border:"1px solid rgba(29,161,242,0.2)",borderRadius:20,padding:"6px 16px",color:"#1DA1F2",fontSize:12,cursor:"pointer"}}>
                   𝕏 シェア
                 </button>
               </div>
