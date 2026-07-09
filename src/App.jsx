@@ -1475,9 +1475,76 @@ function AddressModal({current,onClose,onSave}){
   );
 }
 
+// ===== 受信箱 =====
+function InboxModal({onClose,messages,readMessageIds,onRead}){
+  const [tab,setTab]=useState("all");
+  const [openId,setOpenId]=useState(null);
+  const filtered=messages.filter(m=>{
+    if(tab==="all")return m.target==="all";
+    if(tab==="mine")return m.target==="user";
+    if(tab==="bonus")return m.type==="bonus";
+    return true;
+  });
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:3000,background:"#f5f5f5",display:"flex",flexDirection:"column",fontFamily:"'Noto Sans JP',sans-serif"}}>
+      <div style={{background:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #eee",flexShrink:0}}>
+        <div style={{fontWeight:900,fontSize:16,color:"#111"}}>受信箱</div>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
+      </div>
+      <div style={{display:"flex",background:"#fff",borderBottom:"1px solid #eee",flexShrink:0}}>
+        {[["all","全体"],["mine","あなた宛"],["bonus","ボーナス履歴"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"14px 0",background:"transparent",border:"none",borderBottom:tab===id?"2px solid #d94f6e":"2px solid transparent",color:tab===id?"#d94f6e":"#999",fontSize:13,fontWeight:tab===id?700:400,cursor:"pointer"}}>{label}</button>
+        ))}
+      </div>
+      <div style={{flex:1,overflow:"auto"}}>
+        {filtered.length===0?(
+          <div style={{textAlign:"center",color:"#aaa",padding:"60px 0"}}>
+            <div style={{fontSize:40,marginBottom:12}}>📭</div>
+            <div style={{fontSize:13}}>メッセージはありません</div>
+          </div>
+        ):filtered.map(m=>{
+          const unread=!readMessageIds.has(m.id);
+          const isOpen=openId===m.id;
+          return(
+            <div key={m.id} onClick={()=>{setOpenId(isOpen?null:m.id);if(unread)onRead(m.id);}} style={{background:"#fff",borderBottom:"1px solid #eee",padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:8}}>
+              {unread&&<div style={{width:8,height:8,borderRadius:"50%",background:"#ff3355",marginTop:6,flexShrink:0}}/>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#111",fontWeight:unread?900:400,fontSize:14}}>{m.title}</div>
+                <div style={{color:"#999",fontSize:11,marginTop:4}}>{m.createdAt?.toDate?.().toLocaleString()||""}</div>
+                {isOpen&&<div style={{color:"#555",fontSize:13,marginTop:10,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.body}</div>}
+              </div>
+              <span style={{color:"#ccc",fontSize:16,flexShrink:0}}>{isOpen?"︿":"›"}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ===== 管理者パネル =====
-function AdminPanel({requests,onUpdate,onClose,totalIssued=0,maxIssued=10000000}){
+function AdminPanel({requests,onUpdate,onClose,totalIssued=0,maxIssued=10000000,onSendMessage}){
   const [filter,setFilter]=useState("all");
+  const [section,setSection]=useState("ship");
+  const [msgTitle,setMsgTitle]=useState("");
+  const [msgBody,setMsgBody]=useState("");
+  const [msgTarget,setMsgTarget]=useState("all");
+  const [msgTargetUser,setMsgTargetUser]=useState("");
+  const [msgType,setMsgType]=useState("normal");
+  const [sending,setSending]=useState(false);
+  const submitMessage=async()=>{
+    if(!msgTitle.trim()||!msgBody.trim()){alert("タイトルと本文を入力してください");return;}
+    if(msgTarget==="user"&&!msgTargetUser.trim()){alert("宛先ユーザーIDを入力してください");return;}
+    setSending(true);
+    const result=await onSendMessage({title:msgTitle,body:msgBody,target:msgTarget,targetUserId:msgTarget==="user"?msgTargetUser.trim():null,type:msgType});
+    setSending(false);
+    if(result?.ok){
+      alert("送信しました");
+      setMsgTitle("");setMsgBody("");setMsgTarget("all");setMsgTargetUser("");setMsgType("normal");
+    }else{
+      alert(result?.error||"送信に失敗しました");
+    }
+  };
   const pct=Math.round((totalIssued/maxIssued)*100);
   const isWarning=pct>=80;
   const isDanger=pct>=95; // all / pending / shipped / done
@@ -1497,6 +1564,13 @@ function AdminPanel({requests,onUpdate,onClose,totalIssued=0,maxIssued=10000000}
         </div>
       </div>
 
+      {/* セクション切り替え */}
+      <div style={{display:"flex",background:"#0e0e1a",borderBottom:"1px solid #1a1a2a",flexShrink:0}}>
+        <button onClick={()=>setSection("ship")} style={{flex:1,padding:"10px 0",background:"transparent",border:"none",borderBottom:section==="ship"?"2px solid #ffd700":"2px solid transparent",color:section==="ship"?"#ffd700":"#555",fontSize:13,fontWeight:section==="ship"?700:400,cursor:"pointer"}}>📦 発送管理</button>
+        <button onClick={()=>setSection("announce")} style={{flex:1,padding:"10px 0",background:"transparent",border:"none",borderBottom:section==="announce"?"2px solid #ffd700":"2px solid transparent",color:section==="announce"?"#ffd700":"#555",fontSize:13,fontWeight:section==="announce"?700:400,cursor:"pointer"}}>✉️ お知らせ作成</button>
+      </div>
+
+      {section==="ship"&&(<>
       {/* 発行残高ダッシュボード */}
       <div style={{padding:"12px 16px",background:"#0a0a16",borderBottom:"1px solid #1a1a2a",flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -1582,6 +1656,32 @@ function AdminPanel({requests,onUpdate,onClose,totalIssued=0,maxIssued=10000000}
           </div>
         ))}
       </div>
+      </>)}
+
+      {section==="announce"&&(
+        <div style={{flex:1,overflow:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+          <div>
+            <div style={{color:"#888",fontSize:12,marginBottom:6}}>宛先</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setMsgTarget("all")} style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:msgTarget==="all"?"#ffd700":"#1a1a2a",color:msgTarget==="all"?"#000":"#888",fontWeight:700,cursor:"pointer"}}>全体</button>
+              <button onClick={()=>setMsgTarget("user")} style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:msgTarget==="user"?"#ffd700":"#1a1a2a",color:msgTarget==="user"?"#000":"#888",fontWeight:700,cursor:"pointer"}}>個別</button>
+            </div>
+          </div>
+          {msgTarget==="user"&&(
+            <input value={msgTargetUser} onChange={e=>setMsgTargetUser(e.target.value)} placeholder="宛先ユーザーID" style={{background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:13,outline:"none"}}/>
+          )}
+          <div>
+            <div style={{color:"#888",fontSize:12,marginBottom:6}}>種別</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setMsgType("normal")} style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:msgType==="normal"?"#ffd700":"#1a1a2a",color:msgType==="normal"?"#000":"#888",fontWeight:700,cursor:"pointer"}}>通常</button>
+              <button onClick={()=>setMsgType("bonus")} style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:msgType==="bonus"?"#ffd700":"#1a1a2a",color:msgType==="bonus"?"#000":"#888",fontWeight:700,cursor:"pointer"}}>ボーナス</button>
+            </div>
+          </div>
+          <input value={msgTitle} onChange={e=>setMsgTitle(e.target.value)} placeholder="タイトル" style={{background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:13,outline:"none"}}/>
+          <textarea value={msgBody} onChange={e=>setMsgBody(e.target.value)} placeholder="本文" rows={6} style={{background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:13,outline:"none",resize:"none"}}/>
+          <button onClick={submitMessage} disabled={sending} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"14px",borderRadius:12,fontWeight:900,fontSize:15,cursor:sending?"not-allowed":"pointer"}}>{sending?"送信中...":"送信する"}</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1989,7 +2089,10 @@ export default function App(){
     }
     return true;
   };
-  const [mailCount]=useState(3);
+  const [messages,setMessages]=useState([]);
+  const [readMessageIds,setReadMessageIds]=useState(new Set());
+  const [showInbox,setShowInbox]=useState(false);
+  const mailCount=messages.filter(m=>!readMessageIds.has(m.id)).length;
   const [rank]=useState(42);
   const [showPhoneAuth,setShowPhoneAuth]=useState(false);
   const [phoneVerified,setPhoneVerified]=usePersistedState("phoneVerified",false);
@@ -2073,6 +2176,48 @@ useEffect(()=>{
     });
     return()=>unsub();
   },[user]);
+
+  // お知らせ（全体・あなた宛）の購読
+  useEffect(()=>{
+    if(!user||isGuest){setMessages([]);return;}
+    let allMsgs=[],mineMsgs=[];
+    const merge=()=>{
+      const combined=[...allMsgs,...mineMsgs].sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
+      setMessages(combined);
+    };
+    const qAll=query(collection(db,"messages"),where("target","==","all"),orderBy("createdAt","desc"),limit(50));
+    const qMine=query(collection(db,"messages"),where("target","==","user"),where("targetUserId","==",user.id),orderBy("createdAt","desc"),limit(50));
+    const unsub1=onSnapshot(qAll,(snap)=>{allMsgs=snap.docs.map(d=>({id:d.id,...d.data()}));merge();},()=>{});
+    const unsub2=onSnapshot(qMine,(snap)=>{mineMsgs=snap.docs.map(d=>({id:d.id,...d.data()}));merge();},()=>{});
+    return()=>{unsub1();unsub2();};
+  },[user,isGuest]);
+
+  // 既読状態の購読
+  useEffect(()=>{
+    if(!user||isGuest){setReadMessageIds(new Set());return;}
+    const unsub=onSnapshot(collection(db,"users",user.id,"messageReads"),(snap)=>{
+      setReadMessageIds(new Set(snap.docs.map(d=>d.id)));
+    },()=>{});
+    return()=>unsub();
+  },[user,isGuest]);
+
+  const markMessageRead=(messageId)=>{
+    if(!user||isGuest)return;
+    setDoc(doc(db,"users",user.id,"messageReads",messageId),{readAt:serverTimestamp()});
+  };
+
+  const sendAdminMessage=async({title,body,target,targetUserId,type})=>{
+    try{
+      const idToken=auth.currentUser?await auth.currentUser.getIdToken():null;
+      if(!idToken)return{ok:false,error:"ログインが必要です"};
+      const res=await fetch("/api/send-message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken,title,body,target,targetUserId,type})});
+      const data=await res.json();
+      if(!res.ok)return{ok:false,error:data.error};
+      return{ok:true};
+    }catch(e){
+      return{ok:false,error:"送信に失敗しました"};
+    }
+  };
 
   // ログインが必要なアクションのガード
   const requireLogin=(fn)=>{
@@ -2253,7 +2398,7 @@ useEffect(()=>{
               )}
               <button onClick={()=>setPage("shop")} style={{background:"#ffd700",border:"none",color:"#000",width:18,height:18,borderRadius:"50%",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>+</button>
             </div>
-            <button onClick={()=>notify("メール機能は準備中です")} style={{position:"relative",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center"}}>
+            <button onClick={()=>isGuest?setShowAuthModal(true):setShowInbox(true)} style={{position:"relative",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center"}}>
               ✉️{!isGuest&&mailCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#ff3355",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{mailCount}</span>}
             </button>
             <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(96,184,255,0.1)",border:"1px solid rgba(96,184,255,0.3)",borderRadius:20,padding:"5px 12px"}}>
@@ -2479,7 +2624,8 @@ useEffect(()=>{
       {showPhoneAuth&&<PhoneAuthModal onClose={()=>setShowPhoneAuth(false)} onVerified={()=>{setPhoneVerified(true);notify("電話番号認証が完了しました！");}}/>}
       {showBenefitModal&&<BenefitCodeModal onClose={()=>setShowBenefitModal(false)} currentDiscount={benefitDiscount} onApply={(codeStr,pct)=>{setBenefitCode(codeStr);setBenefitDiscount(pct);notify(`特典コード適用！コインが${pct}%OFFになりました 🎉`);setShowBenefitModal(false);}}/>}
       {showAddressModal&&<AddressModal current={address} onClose={()=>setShowAddressModal(false)} onSave={(addr)=>{setAddress(addr);notify("住所を登録しました！");setShowAddressModal(false);}}/>}
-      {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED}/>}
+      {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED} onSendMessage={sendAdminMessage}/>}
+      {showInbox&&<InboxModal onClose={()=>setShowInbox(false)} messages={messages} readMessageIds={readMessageIds} onRead={markMessageRead}/>}
 
       {/* ログインモーダル */}
       {showAuthModal&&(
