@@ -69,6 +69,32 @@ function drawByChance(packId) {
   return { name: last.name, rarity: last.rarity };
 }
 
+// カード配列から獲得額合計・当選(1等/2等)件数を集計する
+function summarize(cards) {
+  let totalValue = 0, totalWins = 0;
+  for (const c of cards) {
+    totalValue += redeemValueOf(c);
+    if (c.prizeRank === "1等" || c.prizeRank === "2等") totalWins++;
+  }
+  return { totalValue, totalWins };
+}
+
+// ランキング用の公開集計(leaderboard/{uid})を更新する。users本体は個人情報を含むため非公開のまま。
+function bumpLeaderboard(tx, uid, name, cards, drawCount) {
+  const { totalValue, totalWins } = summarize(cards);
+  const leaderboardRef = db.collection("leaderboard").doc(uid);
+  const update = {
+    name: name || "プレイヤー",
+    totalValue: FieldValue.increment(totalValue),
+    totalWins: FieldValue.increment(totalWins),
+    totalDraws: FieldValue.increment(drawCount),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  const wins = cards.filter(c => c.prizeRank === "1等" || c.prizeRank === "2等");
+  if (wins.length > 0) update.recentWin = wins[wins.length - 1].name || "";
+  tx.set(leaderboardRef, update, { merge: true });
+}
+
 // 引いたカードを users/{uid}/cards に記録する（トランザクション内で呼ぶ）
 function recordCards(tx, userRef, cards, pid) {
   const cardsCol = userRef.collection("cards");
@@ -152,6 +178,7 @@ export default async function handler(req, res) {
           totalIssued: FieldValue.increment(-totalCost),
         });
         cardIds = recordCards(tx, userRef, cards, pid);
+        bumpLeaderboard(tx, uid, userSnap.data().name, cards, drawCount);
       });
     } else {
       await db.runTransaction(async (tx) => {
@@ -168,6 +195,7 @@ export default async function handler(req, res) {
           totalIssued: FieldValue.increment(-totalCost),
         });
         cardIds = recordCards(tx, userRef, cards, pid);
+        bumpLeaderboard(tx, uid, userSnap.data().name, cards, drawCount);
       });
     }
 

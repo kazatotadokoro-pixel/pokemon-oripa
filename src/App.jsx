@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment, collection, addDoc, deleteDoc, query, orderBy, limit, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment, collection, addDoc, deleteDoc, query, orderBy, limit, serverTimestamp, where, getCountFromServer } from "firebase/firestore";
 
 const REAL_CARDS = {
   sar: [
@@ -1290,27 +1290,42 @@ function WinReportPage({user,isGuest,onRequireLogin}){
 }
 
 // ===== ランキングページ =====
-function RankingPage({history,user,coins,inviteCount}){
-  const [tab,setTab]=useState("total");
-  const demoRanking=[
-    {name:"ルカリオマスター",total:48000,wins:8,draws:160,recent:"メガルカリオ ex SAR"},
-    {name:"カイリューハンター",total:35000,wins:5,draws:117,recent:"メガカイリュー ex MA"},
-    {name:"レアカード収集家",total:29000,wins:4,draws:97,recent:"ロトム ex SAR"},
-    {name:"オリパ王",total:22000,wins:3,draws:74,recent:"メガズルズキン ex SAR"},
-    {name:"ラッキースター",total:18000,wins:2,draws:60,recent:"ルリナ SR"},
-    {name:"ポケモン好き",total:12000,wins:1,draws:40,recent:"ビクティニ AR"},
-    {name:"初心者トレーナー",total:6000,wins:0,draws:20,recent:"-"},
-  ];
-  const myDraws=history.length;
-  const myTotal=history.reduce((s,c)=>{const r=c.prize?.rank;return s+(r==="1等"?10000:r==="2等"?2000:r==="3等"?1000:1);},0);
-  const myWins=history.filter(c=>c.prize?.rank==="1等"||c.prize?.rank==="2等").length;
-  const myRecent=history.find(c=>c.prize?.rank==="1等"||c.prize?.rank==="2等")?.name||"-";
-  const myEntry={name:user?.name||"あなた",total:myTotal,wins:myWins,draws:myDraws,recent:myRecent,isMe:true};
+const RANKING_FIELD={total:"totalValue",wins:"totalWins",draws:"totalDraws"};
 
-  const sorted=[...demoRanking,myEntry].sort((a,b)=>
-    tab==="wins"?b.wins-a.wins:tab==="draws"?b.draws-a.draws:b.total-a.total
-  );
-  const myRank=sorted.findIndex(r=>r.isMe)+1;
+function RankingPage({user,inviteCount}){
+  const [tab,setTab]=useState("total");
+  const [top,setTop]=useState([]);
+  const [myStats,setMyStats]=useState({totalValue:0,totalWins:0,totalDraws:0,recentWin:""});
+  const [myRank,setMyRank]=useState(null);
+
+  // 全ユーザーの公開集計(leaderboard)を、選んだタブの指標で上位20件取得
+  useEffect(()=>{
+    const field=RANKING_FIELD[tab];
+    const q=query(collection(db,"leaderboard"),orderBy(field,"desc"),limit(20));
+    const unsub=onSnapshot(q,(snap)=>{
+      setTop(snap.docs.map(d=>({id:d.id,...d.data()})));
+    },()=>{});
+    return ()=>unsub();
+  },[tab]);
+
+  // 自分の集計値
+  useEffect(()=>{
+    if(!user?.id){setMyStats({totalValue:0,totalWins:0,totalDraws:0,recentWin:""});return;}
+    const unsub=onSnapshot(doc(db,"leaderboard",user.id),(d)=>{
+      setMyStats(d.exists()?d.data():{totalValue:0,totalWins:0,totalDraws:0,recentWin:""});
+    },()=>{});
+    return ()=>unsub();
+  },[user?.id]);
+
+  // 自分の順位(選択中の指標で自分より上のユーザー数+1)
+  useEffect(()=>{
+    if(!user?.id){setMyRank(null);return;}
+    const field=RANKING_FIELD[tab];
+    const myVal=myStats[field]||0;
+    getCountFromServer(query(collection(db,"leaderboard"),where(field,">",myVal)))
+      .then(snap=>setMyRank(snap.data().count+1))
+      .catch(()=>setMyRank(null));
+  },[tab,user?.id,myStats.totalValue,myStats.totalWins,myStats.totalDraws]);
 
   return(
     <div style={{fontFamily:"'Noto Sans JP',sans-serif"}}>
@@ -1320,11 +1335,11 @@ function RankingPage({history,user,coins,inviteCount}){
       {/* 自分の順位サマリー */}
       <div style={{background:"linear-gradient(135deg,rgba(255,215,0,0.08),rgba(255,144,32,0.05))",border:"1px solid rgba(255,215,0,0.2)",borderRadius:14,padding:"14px 16px",marginBottom:16,display:"flex",gap:16,alignItems:"center"}}>
         <div style={{width:48,height:48,borderRadius:"50%",background:"linear-gradient(135deg,#ffd700,#ff9020)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:18,color:"#000",flexShrink:0}}>
-          {myRank}位
+          {myRank?`${myRank}位`:"-"}
         </div>
         <div style={{flex:1}}>
           <div style={{color:"#ffd700",fontWeight:900,fontSize:14}}>{user?.name||"あなた"}</div>
-          <div style={{color:"#888",fontSize:11,marginTop:2}}>当選{myWins}回 · {myDraws}回引いた · {myTotal.toLocaleString()}コイン分</div>
+          <div style={{color:"#888",fontSize:11,marginTop:2}}>当選{myStats.totalWins||0}回 · {myStats.totalDraws||0}回引いた · {(myStats.totalValue||0).toLocaleString()}コイン分</div>
         </div>
         {inviteCount>0&&<div style={{background:"rgba(46,204,113,0.12)",border:"1px solid rgba(46,204,113,0.3)",borderRadius:10,padding:"4px 10px",color:"#2ecc71",fontSize:11,fontWeight:700}}>招待{inviteCount}人</div>}
       </div>
@@ -1336,29 +1351,36 @@ function RankingPage({history,user,coins,inviteCount}){
         ))}
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {sorted.map((r,i)=>(
-          <div key={i} style={{background:r.isMe?"rgba(255,215,0,0.06)":"#0e0e1a",borderRadius:12,border:`1px solid ${r.isMe?"rgba(255,215,0,0.25)":"#1a1a2a"}`,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,transition:"all 0.2s"}}>
-            <div style={{width:34,height:34,borderRadius:"50%",background:i===0?"linear-gradient(135deg,#ffd700,#ff9020)":i===1?"linear-gradient(135deg,#c0c0c0,#888)":i===2?"linear-gradient(135deg,#cd7f32,#a0522d)":"#1a1a2a",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:i<3?15:13,color:i<3?"#000":"#555",flexShrink:0}}>
-              {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:r.isMe?"#ffd700":"#fff",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                {r.name}
-                {r.isMe&&<span style={{background:"rgba(255,215,0,0.15)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:8,padding:"1px 6px",fontSize:9,color:"#ffd700"}}>あなた</span>}
+      {top.length===0?(
+        <div style={{textAlign:"center",color:"#444",padding:"40px 0",fontSize:13}}>まだ誰も引いていません。最初のランカーになろう！</div>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {top.map((r,i)=>{
+            const isMe=r.id===user?.id;
+            return(
+              <div key={r.id} style={{background:isMe?"rgba(255,215,0,0.06)":"#0e0e1a",borderRadius:12,border:`1px solid ${isMe?"rgba(255,215,0,0.25)":"#1a1a2a"}`,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,transition:"all 0.2s"}}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:i===0?"linear-gradient(135deg,#ffd700,#ff9020)":i===1?"linear-gradient(135deg,#c0c0c0,#888)":i===2?"linear-gradient(135deg,#cd7f32,#a0522d)":"#1a1a2a",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:i<3?15:13,color:i<3?"#000":"#555",flexShrink:0}}>
+                  {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:isMe?"#ffd700":"#fff",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                    {r.name||"プレイヤー"}
+                    {isMe&&<span style={{background:"rgba(255,215,0,0.15)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:8,padding:"1px 6px",fontSize:9,color:"#ffd700"}}>あなた</span>}
+                  </div>
+                  <div style={{color:"#555",fontSize:10,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {tab!=="wins"&&`当選${r.totalWins||0}回 · `}{r.recentWin?`最近: ${r.recentWin}`:"当選なし"}
+                  </div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{color:"#ffd700",fontWeight:900,fontSize:tab==="total"?14:18}}>
+                    {tab==="total"?`${(r.totalValue||0).toLocaleString()}C`:tab==="wins"?`${r.totalWins||0}回`:`${r.totalDraws||0}回`}
+                  </div>
+                </div>
               </div>
-              <div style={{color:"#555",fontSize:10,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {tab!=="wins"&&`当選${r.wins}回 · `}{r.recent!=="-"?`最近: ${r.recent}`:"当選なし"}
-              </div>
-            </div>
-            <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{color:"#ffd700",fontWeight:900,fontSize:tab==="total"?14:18}}>
-                {tab==="total"?`${r.total.toLocaleString()}C`:tab==="wins"?`${r.wins}回`:`${r.draws}回`}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2327,7 +2349,7 @@ useEffect(()=>{
         {page==="lineup"&&<LineupPage packs={packs} sortOrder={sortOrder} setSortOrder={setSortOrder} showSortMenu={showSortMenu} setShowSortMenu={setShowSortMenu} onDraw={doDraw} onMultiDraw={doMultiDraw} onDetail={(pack)=>setDetailPack(pack)}/>}
 
         {page==="history"&&<WinReportPage user={user} isGuest={isGuest} onRequireLogin={()=>setShowAuthModal(true)}/>}
-        {page==="ranking"&&<RankingPage history={history} user={user} coins={coins} inviteCount={inviteCount}/>}
+        {page==="ranking"&&<RankingPage user={user} inviteCount={inviteCount}/>}
 
         {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit} userId={user?.id}/>}
 
