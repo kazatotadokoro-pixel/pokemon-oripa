@@ -1966,6 +1966,7 @@ export default function App(){
   const [multiReveal,setMultiReveal]=useState(null);
   const [pendingCards,setPendingCards]=usePersistedState("pendingCards",[]);
   const [showPendingCards,setShowPendingCards]=useState(false);
+  const [checkedPending,setCheckedPending]=useState(new Set());
   const [detailPack,setDetailPack]=useState(null);
   const [history,setHistory]=usePersistedState("history",[]);
   const [page,setPage]=useState("home");
@@ -2316,7 +2317,7 @@ useEffect(()=>{
 
             {/* 獲得カード一覧ボタン */}
             <div style={{margin:"16px 0 8px"}}>
-              <button onClick={()=>isGuest?setShowAuthModal(true):setShowPendingCards(true)} style={{width:"100%",background:"#0e0e1a",border:"1px solid #2a2a3a",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s"}}
+              <button onClick={()=>isGuest?setShowAuthModal(true):(setCheckedPending(new Set()),setShowPendingCards(true))} style={{width:"100%",background:"#0e0e1a",border:"1px solid #2a2a3a",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.04)"}
                 onMouseLeave={e=>e.currentTarget.style.background="#0e0e1a"}
               >
@@ -2407,8 +2408,10 @@ useEffect(()=>{
               const isHazure=rank==="ハズレ";
               const is3=rank==="3等";
               const coinVal=rank==="1等"?"10,000":rank==="2等"?"2,000":rank==="3等"?"1,000":"1";
+              const checked=checkedPending.has(i);
               return(
-                <div key={i} style={{background:"#fff",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+                <div key={i} style={{background:"#fff",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 2px 8px rgba(0,0,0,0.08)",border:checked?"2px solid #d94f6e":"2px solid transparent"}}>
+                  <input type="checkbox" checked={checked} onChange={()=>setCheckedPending(p=>{const next=new Set(p);if(next.has(i))next.delete(i);else next.add(i);return next;})} style={{width:20,height:20,flexShrink:0,cursor:"pointer"}}/>
                   <div style={{width:90,height:126,flexShrink:0,borderRadius:8,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
                     {isHazure?<NanikaCard size={90} showText={true}/>
                       :is3?<SantouCard size={90} showText={true}/>
@@ -2425,9 +2428,10 @@ useEffect(()=>{
                     {rank!=="ハズレ"&&<div style={{display:"inline-block",background:rank==="1等"?"linear-gradient(135deg,#ffd700,#ff9020)":rank==="2等"?"linear-gradient(135deg,#ffd700,#b8860b)":"linear-gradient(135deg,#60b8ff,#1a5fc8)",borderRadius:20,padding:"2px 10px",color:"#000",fontWeight:900,fontSize:11}}>{rank}</div>}
                   </div>
                   <button onClick={async()=>{
-                    const result=await serverRedeem([c.cardId]);
+                    const result=await serverRedeem([card.cardId]);
                     if(!result){return;}
                     setPendingCards(p=>p.filter((_,j)=>j!==i));
+                    setCheckedPending(p=>{const next=new Set();p.forEach(j=>{if(j<i)next.add(j);else if(j>i)next.add(j-1);});return next;});
                     setCoins(result.coins);
                     notify(`+${result.gained.toLocaleString()}コイン 還元しました！🪙`);
                   }} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>還元</button>
@@ -2436,13 +2440,29 @@ useEffect(()=>{
             })}
           </div>
           {pendingCards.length>0&&(
-            <div style={{background:"#fff",borderTop:"1px solid #eee",padding:"16px 20px 28px",flexShrink:0}}>
+            <div style={{background:"#fff",borderTop:"1px solid #eee",padding:"16px 20px 28px",flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={()=>{
+                if(checkedPending.size===0){notify("発送するカードを選んでください");return;}
+                const shipped=pendingCards.filter((_,i)=>checkedPending.has(i));
+                const newReq={id:"REQ-"+Date.now(),user:user?.name||"ゲスト",userId:user?.id||"GUEST",cards:shipped,address:address||null,status:"pending",date:new Date().toLocaleString()};
+                setShipRequests(prev=>[...prev,newReq]);
+                if(!isGuest&&user){
+                  const reqForDB={...newReq,cards:shipped.map(c=>({name:c.name,rarity:c.rarity,prizeRank:c.prizeRank,packName:c.packName,date:c.date}))};
+                  setDoc(doc(db,"shipRequests",newReq.id),reqForDB);
+                }
+                setPendingCards(p=>p.filter((_,i)=>!checkedPending.has(i)));
+                setCheckedPending(new Set());
+                notify(`${shipped.length}枚の発送申請を受け付けました 📦`);
+              }} style={{width:"100%",background:"#0e0e1a",border:"1px solid #2a2a3a",color:"#fff",padding:"16px",borderRadius:30,fontWeight:900,fontSize:16,cursor:"pointer"}}>
+                📦 選択したカードを発送申請する（{checkedPending.size}枚）
+              </button>
               <button onClick={async()=>{
                 const ids=pendingCards.map(c=>c.cardId);
                 const result=await serverRedeem(ids);
                 if(!result){return;}
                 setCoins(result.coins);
                 setPendingCards([]);
+                setCheckedPending(new Set());
                 notify(`+${result.gained.toLocaleString()}コイン 全て還元しました！🪙`);
                 setShowPendingCards(false);
               }} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"16px",borderRadius:30,fontWeight:900,fontSize:16,cursor:"pointer"}}>
