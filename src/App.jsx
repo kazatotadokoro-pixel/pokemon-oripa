@@ -1503,13 +1503,13 @@ function LoginBonusModal({onClose,claimedDates,onClaim,claiming}){
         <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{fontSize:36,marginBottom:8}}>🎁</div>
           <div style={{color:"#fff",fontWeight:900,fontSize:17}}>ログインボーナス</div>
-          <div style={{color:"#888",fontSize:12,marginTop:6}}>毎日ログインでコインがもらえる！</div>
+          <div style={{color:"#888",fontSize:12,marginTop:6}}>毎日ログインでPがもらえる！</div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
           {days.map(d=>(
             <div key={d.dateStr} style={{background:d.isToday?"rgba(255,215,0,0.1)":"#1a1a2a",border:`1px solid ${d.isToday?"#ffd700":"#2a2a3a"}`,borderRadius:12,padding:"10px 4px",textAlign:"center",opacity:d.isFuture?0.4:1}}>
               <div style={{color:d.isToday?"#ffd700":"#888",fontSize:10,fontWeight:700,marginBottom:4}}>{d.label}</div>
-              <div style={{fontSize:18,marginBottom:2}}>🪙</div>
+              <div style={{color:"#d94f6e",fontWeight:900,fontSize:16,marginBottom:2}}>P</div>
               <div style={{color:"#fff",fontSize:11,fontWeight:700}}>100</div>
               {d.claimed&&<div style={{color:"#2ecc71",fontSize:9,fontWeight:700,marginTop:4}}>受取済</div>}
             </div>
@@ -1519,7 +1519,7 @@ function LoginBonusModal({onClose,claimedDates,onClaim,claiming}){
           <div style={{textAlign:"center",color:"#2ecc71",fontSize:13,fontWeight:700,marginBottom:10}}>本日分は受け取り済みです</div>
         ):(
           <button onClick={onClaim} disabled={claiming} style={{width:"100%",background:claiming?"#333":"#ffd700",border:"none",color:"#000",padding:"15px",borderRadius:12,fontSize:15,fontWeight:900,cursor:claiming?"not-allowed":"pointer",marginBottom:10}}>
-            {claiming?"受け取り中...":"🪙 本日分を受け取る"}
+            {claiming?"受け取り中...":"🎁 本日分を受け取る"}
           </button>
         )}
         <button onClick={onClose} style={{width:"100%",background:"transparent",border:"1px solid #2a2a3a",color:"#555",padding:"12px",borderRadius:12,fontSize:13,cursor:"pointer"}}>閉じる</button>
@@ -2128,6 +2128,7 @@ export default function App(){
   const [showSortMenu,setShowSortMenu]=useState(false);
   const [coins,setCoins]=usePersistedState("coins",1250);
   const [totalIssued,setTotalIssued]=usePersistedState("totalIssued",0); // 累計発行コイン残高
+  const [points,setPoints]=usePersistedState("points",0); // ログインボーナス等で貯まるポイント（コインとは別、法規制上の発行上限対象外）
 
   const MAX_ISSUED=10000000; // 1000万コイン上限
 
@@ -2218,6 +2219,7 @@ useEffect(()=>{
         const data=d.data();
         if(data.coins!==undefined)setCoins(data.coins);
         if(data.totalIssued!==undefined)setTotalIssued(data.totalIssued);
+        if(data.points!==undefined)setPoints(data.points);
         if(data.inviteCoins!==undefined)setInviteCoins(data.inviteCoins);
         if(data.inviteCount!==undefined)setInviteCount(data.inviteCount);
         if(data.myInviteCode!==undefined)setMyInviteCode(data.myInviteCode);
@@ -2306,7 +2308,7 @@ useEffect(()=>{
       const res=await fetch("/api/claim-login-bonus",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken})});
       const data=await res.json();
       if(!res.ok){notify(data.error||"受け取りに失敗しました");setClaimingBonus(false);return;}
-      notify(`ログインボーナス +${data.coins}コイン 🎁`);
+      notify(`ログインボーナス +${data.points}P 🎁`);
     }catch(e){
       notify("受け取りに失敗しました");
     }finally{
@@ -2553,7 +2555,7 @@ useEffect(()=>{
                   <img src={INVITE_COIN} alt="招待コイン" style={{width:20,height:20}}/>
                   <span style={{color:"#ffd700",fontWeight:900,fontSize:14}}>{isGuest?"0":inviteCoins}</span>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,60,80,0.12)",border:"1px solid rgba(255,60,80,0.3)",borderRadius:20,padding:"5px 14px"}}><span style={{color:"#d94f6e",fontWeight:900,fontSize:13}}>P</span><span style={{color:"#fff",fontWeight:900,fontSize:14}}>{isGuest?"0":"3,520"}</span></div>
+                <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,60,80,0.12)",border:"1px solid rgba(255,60,80,0.3)",borderRadius:20,padding:"5px 14px"}}><span style={{color:"#d94f6e",fontWeight:900,fontSize:13}}>P</span><span style={{color:"#fff",fontWeight:900,fontSize:14}}>{isGuest?"0":points.toLocaleString()}</span></div>
 
             {/* 獲得カード一覧ボタン */}
             <div style={{margin:"16px 0 8px"}}>

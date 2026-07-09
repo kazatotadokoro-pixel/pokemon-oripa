@@ -42,11 +42,10 @@ export default async function handler(req, res) {
       if (!userSnap.exists) throw { code: "no-user" };
       tx.set(claimRef, { claimedAt: FieldValue.serverTimestamp(), amount: REWARD });
       tx.update(userRef, {
-        coins: FieldValue.increment(REWARD),
-        totalIssued: FieldValue.increment(REWARD),
+        points: FieldValue.increment(REWARD),
       });
     });
-    return res.status(200).json({ ok: true, coins: REWARD });
+    return res.status(200).json({ ok: true, points: REWARD });
   } catch (err) {
     if (err && err.code === "already-claimed") {
       return res.status(400).json({ error: "本日分は受け取り済みです" });
