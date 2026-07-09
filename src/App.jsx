@@ -826,7 +826,7 @@ function ShopPage({notify,discount=0,benefitCode=null,onPurchase,checkLimit,ageL
   const [selectedPay,setSelectedPay]=useState(null);
   const [progress,setProgress]=useState(0);
 
-  const PLANS=[{coins:500,price:500,size:1},{coins:1000,price:1000,size:2},{coins:2000,price:2000,size:3},{coins:3000,price:3000,size:4},{coins:5000,price:5000,size:5},{coins:10000,price:10000,size:6}];
+  const PLANS=[{coins:100,price:100,size:1},{coins:500,price:500,size:1},{coins:1000,price:1000,size:2},{coins:2000,price:2000,size:3},{coins:3000,price:3000,size:4},{coins:5000,price:5000,size:5},{coins:10000,price:10000,size:6},{coins:30000,price:30000,size:7},{coins:50000,price:50000,size:8},{coins:100000,price:100000,size:9},{coins:300000,price:300000,size:10},{coins:500000,price:500000,size:11},{coins:1000000,price:1000000,size:12}];
   const PAYS=[{id:"credit",label:"クレジットカード",icon:"💳",sub:"VISA / Mastercard / JCB / AMEX"},{id:"paypay",label:"PayPay",icon:"🟡",sub:"残高・クレジット払い"},{id:"cvs",label:"コンビニ支払い",icon:"🏪",sub:"ファミマ・ローソン・セブン他"}];
   const dp=(price)=>discount>0?Math.floor(price*(1-discount/100)):price;
   const open=(plan)=>{setStep("payment");setProgress(0);setSelectedPay(null);setModal(plan);};
