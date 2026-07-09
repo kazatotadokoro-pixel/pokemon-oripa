@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment, collection, addDoc, deleteDoc, query, orderBy, limit, serverTimestamp } from "firebase/firestore";
 
 const REAL_CARDS = {
   sar: [
@@ -1102,9 +1102,7 @@ function AgeCheckModal({onConfirm}){
 
 // ===== 当選報告掲示板 =====
 function WinReportPage({user,isGuest,onRequireLogin}){
-  const [posts,setPosts]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem("winPosts")||"[]");}catch{return [];}
-  });
+  const [posts,setPosts]=useState([]);
   const [showForm,setShowForm]=useState(false);
   const [msg,setMsg]=useState("");
   const [imgData,setImgData]=useState(null);
@@ -1113,46 +1111,68 @@ function WinReportPage({user,isGuest,onRequireLogin}){
   const [posting,setPosting]=useState(false);
   const [confetti,setConfetti]=useState([]);
 
-  const savePosts=(next)=>{
-    setPosts(next);
-    try{localStorage.setItem("winPosts",JSON.stringify(next));}catch{}
-  };
+  // 全ユーザー共有の当選報告フィード（Firestore）
+  useEffect(()=>{
+    const q=query(collection(db,"winPosts"),orderBy("createdAt","desc"),limit(50));
+    const unsub=onSnapshot(q,(snap)=>{
+      setPosts(snap.docs.map(d=>({id:d.id,...d.data()})));
+    },()=>{});
+    return ()=>unsub();
+  },[]);
 
   const handleImg=(e)=>{
     const file=e.target.files[0];
     if(!file)return;
     const reader=new FileReader();
-    reader.onload=(ev)=>setImgData(ev.target.result);
+    reader.onload=(ev)=>{
+      // Firestoreの1ドキュメント上限(1MB)に収まるよう縮小・圧縮してから保存
+      const img=new window.Image();
+      img.onload=()=>{
+        const maxW=800;
+        const scale=Math.min(1,maxW/img.width);
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.round(img.width*scale);
+        canvas.height=Math.round(img.height*scale);
+        canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+        setImgData(canvas.toDataURL("image/jpeg",0.6));
+      };
+      img.src=ev.target.result;
+    };
     reader.readAsDataURL(file);
   };
 
-  const submit=()=>{
+  const submit=async()=>{
     if(!msg.trim()&&!imgData){return;}
     setPosting(true);
-    setTimeout(()=>{
-      const newPost={
-        id:Date.now(),
+    try{
+      await addDoc(collection(db,"winPosts"),{
         user:user?.name||"ゲスト",
-        rank,cardName,msg,imgData,
+        userId:user?.id||null,
+        rank,cardName,msg,imgData:imgData||null,
         date:new Date().toLocaleString(),
+        createdAt:serverTimestamp(),
         likes:0,
-      };
-      const next=[newPost,...posts];
-      savePosts(next);
+      });
       setMsg("");setImgData(null);setCardName("");setRank("1等");
-      setShowForm(false);setPosting(false);
+      setShowForm(false);
       // 紙吹雪
       setConfetti([...Array(30)].map((_,i)=>({id:i,x:Math.random()*100,color:`hsl(${Math.random()*360},80%,60%)`,dur:2+Math.random()*2,delay:Math.random()*1})));
       setTimeout(()=>setConfetti([]),5000);
-    },800);
+    }catch(e){
+      alert("投稿に失敗しました。時間をおいて再度お試しください。");
+    }finally{
+      setPosting(false);
+    }
   };
 
-  const likePost=(id)=>{
-    savePosts(posts.map(p=>p.id===id?{...p,likes:p.likes+1}:p));
+  const likePost=async(id)=>{
+    try{await updateDoc(doc(db,"winPosts",id),{likes:increment(1)});}catch(e){}
   };
 
-  const deletePost=(id)=>{
-    savePosts(posts.filter(p=>p.id!==id));
+  const deletePost=async(id)=>{
+    try{await deleteDoc(doc(db,"winPosts",id));}catch(e){
+      alert("削除に失敗しました。");
+    }
   };
 
   const RANK_COLORS={"1等":"linear-gradient(135deg,#ffd700,#ff9020)","2等":"linear-gradient(135deg,#c0c0c0,#888)","3等":"linear-gradient(135deg,#cd7f32,#a0522d)"};
@@ -1227,7 +1247,7 @@ function WinReportPage({user,isGuest,onRequireLogin}){
                   <div style={{color:"#555",fontSize:11,marginTop:1}}>{post.date}</div>
                 </div>
                 {/* 自分の投稿は削除可 */}
-                {(user?.name===post.user||!post.user||post.user==="ゲスト")&&(
+                {(post.userId?post.userId===user?.id:(user?.name===post.user||!post.user||post.user==="ゲスト"))&&(
                   <button onClick={()=>deletePost(post.id)} style={{background:"none",border:"none",color:"#333",fontSize:16,cursor:"pointer",padding:"4px"}}>🗑</button>
                 )}
               </div>
