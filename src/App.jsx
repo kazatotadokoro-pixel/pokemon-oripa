@@ -822,14 +822,11 @@ function LineupPage({packs,sortOrder,setSortOrder,showSortMenu,setShowSortMenu,o
 // ===== ShopPage =====
 function ShopPage({notify,discount=0,benefitCode=null,onPurchase,checkLimit,ageLimit,userId}){
   const [modal,setModal]=useState(null);
-  const [step,setStep]=useState("payment"); // payment / processing / complete
-  const [selectedPay,setSelectedPay]=useState(null);
-  const [progress,setProgress]=useState(0);
 
   const PLANS=[{coins:100,price:100,size:1},{coins:500,price:500,size:1},{coins:1000,price:1000,size:2},{coins:2000,price:2000,size:3},{coins:3000,price:3000,size:4},{coins:5000,price:5000,size:5},{coins:10000,price:10000,size:6},{coins:30000,price:30000,size:7},{coins:50000,price:50000,size:8},{coins:100000,price:100000,size:9},{coins:300000,price:300000,size:10},{coins:500000,price:500000,size:11},{coins:1000000,price:1000000,size:12}];
-  const PAYS=[{id:"credit",label:"クレジットカード",icon:"💳",sub:"VISA / Mastercard / JCB / AMEX"},{id:"paypay",label:"PayPay",icon:"🟡",sub:"残高・クレジット払い"},{id:"cvs",label:"コンビニ支払い",icon:"🏪",sub:"ファミマ・ローソン・セブン他"}];
+  const PAYS=[{id:"credit",label:"クレジットカード",icon:"💳",sub:"VISA / Mastercard / JCB / AMEX"}];
   const dp=(price)=>discount>0?Math.floor(price*(1-discount/100)):price;
-  const open=(plan)=>{setStep("payment");setProgress(0);setSelectedPay(null);setModal(plan);};
+  const open=(plan)=>{setModal(plan);};
 
   const handlePay=(method)=>{
     const proceed=async()=>{
@@ -872,80 +869,30 @@ function ShopPage({notify,discount=0,benefitCode=null,onPurchase,checkLimit,ageL
       </div>
 
       {modal&&(
-        <div style={{position:"fixed",inset:0,zIndex:2500,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>step!=="processing"&&setModal(null)}>
+        <div style={{position:"fixed",inset:0,zIndex:2500,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto",fontFamily:"'Noto Sans JP',sans-serif"}}>
 
             {/* 決済方法選択 */}
-            {step==="payment"&&(
-              <div style={{padding:"24px 20px 40px"}}>
-                <div style={{display:"flex",alignItems:"center",marginBottom:20}}>
-                  <div style={{flex:1,textAlign:"center",fontWeight:900,fontSize:16,color:"#111"}}>決済方法を選択</div>
-                  <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
-                </div>
-                <div style={{background:"#f8f8f8",borderRadius:12,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:22}}>🪙</span>
-                  <div><div style={{fontWeight:900,color:"#111",fontSize:15}}>{modal.coins.toLocaleString()}コイン</div><div style={{color:"#aaa",fontSize:11}}>¥{modal.price.toLocaleString()}{discount>0?" (特典コード適用)":""}</div></div>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-                  {PAYS.map(m=>(
-                    <button key={m.id} onClick={()=>handlePay(m)} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:14,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.06)",width:"100%"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#d94f6e"} onMouseLeave={e=>e.currentTarget.style.borderColor="#e8e8e8"}>
-                      <span style={{fontSize:28,minWidth:36,textAlign:"center"}}>{m.icon}</span>
-                      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:"#111"}}>{m.label}</div><div style={{fontSize:11,color:"#aaa",marginTop:2}}>{m.sub}</div></div>
-                      <div style={{width:32,height:32,borderRadius:"50%",background:"#d94f6e",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,flexShrink:0}}>›</div>
-                    </button>
-                  ))}
-                </div>
-                <div style={{textAlign:"center",color:"#bbb",fontSize:11}}>選択した決済方法に応じて決済ページへ移動します</div>
+            <div style={{padding:"24px 20px 40px"}}>
+              <div style={{display:"flex",alignItems:"center",marginBottom:20}}>
+                <div style={{flex:1,textAlign:"center",fontWeight:900,fontSize:16,color:"#111"}}>決済方法を選択</div>
+                <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
               </div>
-            )}
-
-            {/* 処理中 */}
-            {step==="processing"&&(
-              <div style={{padding:"48px 24px 56px",textAlign:"center"}}>
-                <div style={{fontSize:48,marginBottom:16}}>{selectedPay?.icon}</div>
-                <div style={{fontWeight:900,fontSize:16,color:"#111",marginBottom:6}}>{selectedPay?.label}で決済中...</div>
-                <div style={{color:"#aaa",fontSize:12,marginBottom:24}}>¥{modal.price.toLocaleString()} · {modal.coins.toLocaleString()}コイン</div>
-                {/* プログレスバー */}
-                <div style={{background:"#f0f0f0",borderRadius:20,height:10,overflow:"hidden",marginBottom:12}}>
-                  <div style={{width:`${progress}%`,height:"100%",background:"linear-gradient(90deg,#d94f6e,#ff8099)",borderRadius:20,transition:"width 0.5s ease"}}/>
-                </div>
-                <div style={{color:"#888",fontSize:12}}>
-                  {progress<20?"決済サーバーに接続中...":progress<45?"支払い情報を確認中...":progress<70?"決済を処理中...":progress<90?"コインを付与中...":"完了！"}
-                </div>
-                {/* バックエンド処理ログ風 */}
-                <div style={{marginTop:20,background:"#f8f8f8",borderRadius:10,padding:"12px 16px",textAlign:"left"}}>
-                  {[
-                    {pct:5,  text:"[SERVER] 決済リクエスト受信"},
-                    {pct:25, text:"[DB] ユーザー認証確認"},
-                    {pct:50, text:"[PAYMENT] 決済処理実行"},
-                    {pct:75, text:"[DB] コイン残高更新"},
-                    {pct:95, text:"[SERVER] トランザクション完了"},
-                  ].filter(l=>progress>=l.pct).map((l,i)=>(
-                    <div key={i} style={{fontFamily:"monospace",fontSize:10,color:"#2ecc71",marginBottom:3}}>✓ {l.text}</div>
-                  ))}
-                </div>
+              <div style={{background:"#f8f8f8",borderRadius:12,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>🪙</span>
+                <div><div style={{fontWeight:900,color:"#111",fontSize:15}}>{modal.coins.toLocaleString()}コイン</div><div style={{color:"#aaa",fontSize:11}}>¥{modal.price.toLocaleString()}{discount>0?" (特典コード適用)":""}</div></div>
               </div>
-            )}
-
-            {/* 完了 */}
-            {step==="complete"&&(
-              <div style={{padding:"48px 24px 56px",textAlign:"center"}}>
-                <div style={{fontSize:64,marginBottom:16}}>✅</div>
-                <div style={{fontWeight:900,fontSize:20,color:"#111",marginBottom:8}}>購入完了！</div>
-                <div style={{color:"#aaa",fontSize:13,marginBottom:24}}>{selectedPay?.label}でのお支払いが完了しました</div>
-                <div style={{background:"linear-gradient(135deg,#fff8e1,#fff3cd)",border:"2px solid #ffd700",borderRadius:16,padding:"20px",marginBottom:24}}>
-                  <div style={{color:"#888",fontSize:12,marginBottom:4}}>付与されたコイン</div>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                    <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#ffd700,#ff9020)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:"#000"}}>C</div>
-                    <span style={{fontWeight:900,fontSize:36,color:"#111"}}>+{modal.coins.toLocaleString()}</span>
-                  </div>
-                  <div style={{color:"#aaa",fontSize:11,marginTop:4}}>¥{modal.price.toLocaleString()} のお支払い</div>
-                </div>
-                <button onClick={()=>setModal(null)} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"16px",borderRadius:12,fontSize:16,fontWeight:900,cursor:"pointer"}}>
-                  閉じる
-                </button>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+                {PAYS.map(m=>(
+                  <button key={m.id} onClick={()=>handlePay(m)} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:14,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.06)",width:"100%"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#d94f6e"} onMouseLeave={e=>e.currentTarget.style.borderColor="#e8e8e8"}>
+                    <span style={{fontSize:28,minWidth:36,textAlign:"center"}}>{m.icon}</span>
+                    <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:"#111"}}>{m.label}</div><div style={{fontSize:11,color:"#aaa",marginTop:2}}>{m.sub}</div></div>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:"#d94f6e",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,flexShrink:0}}>›</div>
+                  </button>
+                ))}
               </div>
-            )}
+              <div style={{textAlign:"center",color:"#bbb",fontSize:11}}>選択した決済方法に応じて決済ページへ移動します</div>
+            </div>
           </div>
         </div>
       )}
