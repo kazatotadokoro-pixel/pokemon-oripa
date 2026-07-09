@@ -1475,6 +1475,59 @@ function AddressModal({current,onClose,onSave}){
   );
 }
 
+// ===== ログインボーナス =====
+const DOW_LABELS=["月","火","水","木","金","土","日"];
+function jstDateStr(ms){
+  return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(ms));
+}
+function jstWeekdayIdx(ms){
+  // 0=Sun,1=Mon,...6=Sat
+  const s=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Tokyo",weekday:"short"}).format(new Date(ms));
+  return {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}[s];
+}
+function LoginBonusModal({onClose,claimedDates,onClaim,claiming}){
+  const now=Date.now();
+  const DAY=86400000;
+  const wd=jstWeekdayIdx(now); // 0=Sun...6=Sat
+  const daysSinceMonday=wd===0?6:wd-1;
+  const mondayMs=now-daysSinceMonday*DAY;
+  const todayStr=jstDateStr(now);
+  const days=[...Array(7)].map((_,i)=>{
+    const ms=mondayMs+i*DAY;
+    const dateStr=jstDateStr(ms);
+    return {dateStr,label:DOW_LABELS[i],isToday:dateStr===todayStr,isFuture:ms>now,claimed:claimedDates.has(dateStr)};
+  });
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:3500,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#0e0e1a",borderRadius:20,width:"100%",maxWidth:420,border:"1px solid #1a1a2a",fontFamily:"'Noto Sans JP',sans-serif",padding:"28px 20px"}}>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:36,marginBottom:8}}>🎁</div>
+          <div style={{color:"#fff",fontWeight:900,fontSize:17}}>ログインボーナス</div>
+          <div style={{color:"#888",fontSize:12,marginTop:6}}>毎日ログインでコインがもらえる！</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
+          {days.map(d=>(
+            <div key={d.dateStr} style={{background:d.isToday?"rgba(255,215,0,0.1)":"#1a1a2a",border:`1px solid ${d.isToday?"#ffd700":"#2a2a3a"}`,borderRadius:12,padding:"10px 4px",textAlign:"center",opacity:d.isFuture?0.4:1}}>
+              <div style={{color:d.isToday?"#ffd700":"#888",fontSize:10,fontWeight:700,marginBottom:4}}>{d.label}</div>
+              <div style={{fontSize:18,marginBottom:2}}>🪙</div>
+              <div style={{color:"#fff",fontSize:11,fontWeight:700}}>100</div>
+              {d.claimed&&<div style={{color:"#2ecc71",fontSize:9,fontWeight:700,marginTop:4}}>受取済</div>}
+            </div>
+          ))}
+        </div>
+        {claimedDates.has(todayStr)?(
+          <div style={{textAlign:"center",color:"#2ecc71",fontSize:13,fontWeight:700,marginBottom:10}}>本日分は受け取り済みです</div>
+        ):(
+          <button onClick={onClaim} disabled={claiming} style={{width:"100%",background:claiming?"#333":"#ffd700",border:"none",color:"#000",padding:"15px",borderRadius:12,fontSize:15,fontWeight:900,cursor:claiming?"not-allowed":"pointer",marginBottom:10}}>
+            {claiming?"受け取り中...":"🪙 本日分を受け取る"}
+          </button>
+        )}
+        <button onClick={onClose} style={{width:"100%",background:"transparent",border:"1px solid #2a2a3a",color:"#555",padding:"12px",borderRadius:12,fontSize:13,cursor:"pointer"}}>閉じる</button>
+      </div>
+    </div>
+  );
+}
+
 // ===== 受信箱 =====
 function InboxModal({onClose,messages,readMessageIds,onRead}){
   const [tab,setTab]=useState("all");
@@ -2093,6 +2146,10 @@ export default function App(){
   const [readMessageIds,setReadMessageIds]=useState(new Set());
   const [showInbox,setShowInbox]=useState(false);
   const mailCount=messages.filter(m=>!readMessageIds.has(m.id)).length;
+  const [loginBonusClaims,setLoginBonusClaims]=useState(null); // null=未読込, Set=読込済み
+  const [showLoginBonus,setShowLoginBonus]=useState(false);
+  const [claimingBonus,setClaimingBonus]=useState(false);
+  const loginBonusAutoShown=useRef(false);
   const [rank]=useState(42);
   const [showPhoneAuth,setShowPhoneAuth]=useState(false);
   const [phoneVerified,setPhoneVerified]=usePersistedState("phoneVerified",false);
@@ -2216,6 +2273,44 @@ useEffect(()=>{
       return{ok:true};
     }catch(e){
       return{ok:false,error:"送信に失敗しました"};
+    }
+  };
+
+  // ログインボーナスの受け取り状況を購読
+  useEffect(()=>{
+    if(!user||isGuest){setLoginBonusClaims(null);return;}
+    const unsub=onSnapshot(collection(db,"users",user.id,"loginBonusClaims"),(snap)=>{
+      setLoginBonusClaims(new Set(snap.docs.map(d=>d.id)));
+    },()=>{});
+    return()=>unsub();
+  },[user,isGuest]);
+
+  const todayJstStr=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+
+  // ログイン時に、本日分が未受け取りなら自動でポップアップを1回だけ出す
+  useEffect(()=>{
+    if(!user||isGuest||!loginBonusClaims)return;
+    if(loginBonusAutoShown.current)return;
+    if(!loginBonusClaims.has(todayJstStr())){
+      setShowLoginBonus(true);
+      loginBonusAutoShown.current=true;
+    }
+  },[user,isGuest,loginBonusClaims]);
+
+  const claimLoginBonus=async()=>{
+    if(!user||isGuest)return;
+    setClaimingBonus(true);
+    try{
+      const idToken=auth.currentUser?await auth.currentUser.getIdToken():null;
+      if(!idToken){notify("ログインが必要です");setClaimingBonus(false);return;}
+      const res=await fetch("/api/claim-login-bonus",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken})});
+      const data=await res.json();
+      if(!res.ok){notify(data.error||"受け取りに失敗しました");setClaimingBonus(false);return;}
+      notify(`ログインボーナス +${data.coins}コイン 🎁`);
+    }catch(e){
+      notify("受け取りに失敗しました");
+    }finally{
+      setClaimingBonus(false);
     }
   };
 
@@ -2626,6 +2721,7 @@ useEffect(()=>{
       {showAddressModal&&<AddressModal current={address} onClose={()=>setShowAddressModal(false)} onSave={(addr)=>{setAddress(addr);notify("住所を登録しました！");setShowAddressModal(false);}}/>}
       {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED} onSendMessage={sendAdminMessage}/>}
       {showInbox&&<InboxModal onClose={()=>setShowInbox(false)} messages={messages} readMessageIds={readMessageIds} onRead={markMessageRead}/>}
+      {showLoginBonus&&loginBonusClaims&&<LoginBonusModal onClose={()=>setShowLoginBonus(false)} claimedDates={loginBonusClaims} onClaim={claimLoginBonus} claiming={claimingBonus}/>}
 
       {/* ログインモーダル */}
       {showAuthModal&&(
