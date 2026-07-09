@@ -50,7 +50,6 @@ const POOLS = {
   4:[{name:"リーリエ SAR",rarity:"SAR",image:"👒✨",chance:0.1},{name:"アセロラ SAR",rarity:"SAR",image:"👻✨",chance:0.1},{name:"クワガノン V SAR",rarity:"SAR",image:"🐛✨",chance:0.1},{name:"ミュウ V SAR",rarity:"SR",image:"🌸",chance:1},{name:"フリーザー V SR",rarity:"SR",image:"❄️",chance:1},{name:"ルナアーラ V SR",rarity:"SR",image:"🌙✨",chance:1},{name:"ピクシー V SR",rarity:"SR",image:"🌟",chance:1},{name:"トゲキッス V RR",rarity:"RR",image:"💫",chance:5},{name:"クレセリア RR",rarity:"RR",image:"🌛",chance:5},{name:"サーナイト RR",rarity:"RR",image:"💚",chance:5},{name:"ハピナス R",rarity:"R",image:"🥚",chance:30},{name:"ピクシー R",rarity:"R",image:"🧚",chance:30},{name:"マリルリ C",rarity:"C",image:"💧",chance:80},{name:"ハネッコ C",rarity:"C",image:"🌸",chance:80}],
 };
 
-const BENEFIT_CODES = { "COIN10":{discount:10}, "COIN20":{discount:20}, "VIPCODE":{discount:30} };
 const SORT_OPTS = [{id:"default",label:"デフォルト"},{id:"price_asc",label:"金額が安い"},{id:"price_desc",label:"金額が高い"},{id:"remain_asc",label:"残りが少ない"},{id:"remain_desc",label:"残りが多い"},{id:"new",label:"新着"}];
 
 function drawCard(packId, drawnSar=new Set(), drawnSr=new Set()) {
@@ -821,23 +820,16 @@ function LineupPage({packs,sortOrder,setSortOrder,showSortMenu,setShowSortMenu,o
 }
 
 // ===== ShopPage =====
-function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
+function ShopPage({notify,discount=0,benefitCode=null,onPurchase,checkLimit,ageLimit,userId}){
   const [modal,setModal]=useState(null);
-  const [code,setCode]=useState("");
-  const [msg,setMsg]=useState(null);
-  const [step,setStep]=useState("coupon"); // coupon / payment / processing / complete
+  const [step,setStep]=useState("payment"); // payment / processing / complete
   const [selectedPay,setSelectedPay]=useState(null);
   const [progress,setProgress]=useState(0);
 
   const PLANS=[{coins:500,price:500,size:1},{coins:1000,price:1000,size:2},{coins:2000,price:2000,size:3},{coins:3000,price:3000,size:4},{coins:5000,price:5000,size:5},{coins:10000,price:10000,size:6}];
   const PAYS=[{id:"credit",label:"クレジットカード",icon:"💳",sub:"VISA / Mastercard / JCB / AMEX"},{id:"paypay",label:"PayPay",icon:"🟡",sub:"残高・クレジット払い"},{id:"cvs",label:"コンビニ支払い",icon:"🏪",sub:"ファミマ・ローソン・セブン他"}];
   const dp=(price)=>discount>0?Math.floor(price*(1-discount/100)):price;
-  const open=(plan)=>{setCode("");setMsg(null);setStep("coupon");setProgress(0);setSelectedPay(null);setModal(plan);};
-  const applyCode=()=>{
-    if(!code.trim()){setMsg({type:"error",text:"クーポン番号を入力してください"});return;}
-    if(code.trim().toUpperCase()==="ORIPA2025"){setMsg({type:"ok",text:"クーポン適用！10%割引になりました 🎉"});}
-    else{setMsg({type:"error",text:"このクーポンは無効または期限切れです"});}
-  };
+  const open=(plan)=>{setStep("payment");setProgress(0);setSelectedPay(null);setModal(plan);};
 
   const handlePay=(method)=>{
     const proceed=async()=>{
@@ -847,11 +839,11 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
         const res=await fetch("/api/create-checkout",{
           method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({coins:modal.coins,discount:discount||0,idToken})
+          body:JSON.stringify({coins:modal.coins,code:benefitCode||null,idToken})
         });
         const data=await res.json();
         if(data.url){window.location.href=data.url;}
-        else{alert("決済エラーが発生しました");}
+        else{alert(data.error||"決済エラーが発生しました");}
       }catch(e){alert("決済エラーが発生しました");}
     };
     if(checkLimit){checkLimit(modal.price,proceed);}else{proceed();}
@@ -883,32 +875,16 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
         <div style={{position:"fixed",inset:0,zIndex:2500,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>step!=="processing"&&setModal(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto",fontFamily:"'Noto Sans JP',sans-serif"}}>
 
-            {/* クーポン */}
-            {step==="coupon"&&(
-              <div style={{padding:"28px 24px 40px"}}>
-                <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}><button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button></div>
-                <div style={{textAlign:"center",marginBottom:24}}><div style={{fontSize:36,marginBottom:8}}>🎟️</div><div style={{color:"#111",fontWeight:900,fontSize:17}}>クーポンをお持ちですか？</div><div style={{color:"#aaa",fontSize:12,marginTop:4}}>{modal.coins.toLocaleString()}コイン / ¥{modal.price.toLocaleString()}</div></div>
-                <div style={{display:"flex",gap:8,marginBottom:10}}>
-                  <input value={code} onChange={e=>{setCode(e.target.value);setMsg(null);}} placeholder="クーポン番号を入力" style={{flex:1,background:"#f5f5f5",border:"1px solid #ddd",borderRadius:10,padding:"13px 16px",color:"#111",fontSize:14,outline:"none"}}/>
-                  <button onClick={applyCode} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"0 18px",borderRadius:10,fontWeight:900,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>適用</button>
-                </div>
-                {msg&&<div style={{padding:"10px 14px",borderRadius:8,marginBottom:14,background:msg.type==="ok"?"#e8f8ee":"#fff0f0",border:`1px solid ${msg.type==="ok"?"#88ddaa":"#ffaaaa"}`,color:msg.type==="ok"?"#2a8a4a":"#cc3333",fontSize:13}}>{msg.text}</div>}
-                <button onClick={()=>setStep("payment")} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"15px",borderRadius:12,fontSize:15,fontWeight:900,cursor:"pointer",marginBottom:10}}>{msg?.type==="ok"?"クーポンを使って購入 🎉":"このまま購入する"}</button>
-                <button onClick={()=>setModal(null)} style={{width:"100%",background:"transparent",border:"1px solid #ddd",color:"#aaa",padding:"12px",borderRadius:12,fontSize:13,cursor:"pointer"}}>購入をやめる</button>
-              </div>
-            )}
-
             {/* 決済方法選択 */}
             {step==="payment"&&(
               <div style={{padding:"24px 20px 40px"}}>
                 <div style={{display:"flex",alignItems:"center",marginBottom:20}}>
-                  <button onClick={()=>setStep("coupon")} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#999",marginRight:8}}>←</button>
                   <div style={{flex:1,textAlign:"center",fontWeight:900,fontSize:16,color:"#111"}}>決済方法を選択</div>
                   <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#999"}}>✕</button>
                 </div>
                 <div style={{background:"#f8f8f8",borderRadius:12,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:22}}>🪙</span>
-                  <div><div style={{fontWeight:900,color:"#111",fontSize:15}}>{modal.coins.toLocaleString()}コイン</div><div style={{color:"#aaa",fontSize:11}}>¥{modal.price.toLocaleString()}{msg?.type==="ok"?" (クーポン適用)":""}</div></div>
+                  <div><div style={{fontWeight:900,color:"#111",fontSize:15}}>{modal.coins.toLocaleString()}コイン</div><div style={{color:"#aaa",fontSize:11}}>¥{modal.price.toLocaleString()}{discount>0?" (特典コード適用)":""}</div></div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
                   {PAYS.map(m=>(
@@ -981,18 +957,29 @@ function ShopPage({notify,discount=0,onPurchase,checkLimit,ageLimit,userId}){
 function BenefitCodeModal({onClose,currentDiscount,onApply}){
   const [code,setCode]=useState("");
   const [msg,setMsg]=useState(null);
-  const check=()=>{
+  const [checking,setChecking]=useState(false);
+  const [checkedDiscount,setCheckedDiscount]=useState(null);
+  const check=async()=>{
     const t=code.trim().toUpperCase();
     if(!t){setMsg({type:"error",text:"コードを入力してください"});return;}
-    const found=BENEFIT_CODES[t];
-    if(!found){setMsg({type:"error",text:"このコードは無効または期限切れです"});return;}
-    setMsg({type:"ok",text:`${found.discount}%OFFが適用されます！`});
+    setChecking(true);
+    try{
+      const res=await fetch("/api/check-benefit-code",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:t})});
+      const data=await res.json();
+      if(!res.ok||!data.ok){setMsg({type:"error",text:data.error||"このコードは無効または期限切れです"});setCheckedDiscount(null);return;}
+      setCheckedDiscount(data.discount);
+      setMsg({type:"ok",text:`${data.discount}%OFFが適用されます！`});
+    }catch(e){
+      setMsg({type:"error",text:"確認に失敗しました。時間をおいてお試しください"});
+      setCheckedDiscount(null);
+    }finally{
+      setChecking(false);
+    }
   };
   const apply=()=>{
     const t=code.trim().toUpperCase();
-    const found=BENEFIT_CODES[t];
-    if(!found||!msg||msg.type!=="ok"){setMsg({type:"error",text:"有効なコードを入力してください"});return;}
-    onApply(found.discount);
+    if(!msg||msg.type!=="ok"||checkedDiscount==null){setMsg({type:"error",text:"有効なコードを入力してください"});return;}
+    onApply(t,checkedDiscount);
   };
   return(
     <div style={{position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
@@ -1005,15 +992,14 @@ function BenefitCodeModal({onClose,currentDiscount,onApply}){
           {currentDiscount>0&&<div style={{marginTop:10,color:"#2ecc71",fontSize:13,fontWeight:700}}>現在 {currentDiscount}%OFF 適用中</div>}
         </div>
         <div style={{display:"flex",gap:8,marginBottom:10}}>
-          <input value={code} onChange={e=>{setCode(e.target.value.toUpperCase());setMsg(null);}} placeholder="例: COIN10" style={{flex:1,background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"13px 16px",color:"#fff",fontSize:14,outline:"none",letterSpacing:1}}/>
-          <button onClick={check} style={{background:"#ffd700",border:"none",color:"#000",padding:"0 18px",borderRadius:10,fontWeight:900,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>確認</button>
+          <input value={code} onChange={e=>{setCode(e.target.value.toUpperCase());setMsg(null);setCheckedDiscount(null);}} placeholder="コードを入力" style={{flex:1,background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"13px 16px",color:"#fff",fontSize:14,outline:"none",letterSpacing:1}}/>
+          <button onClick={check} disabled={checking} style={{background:"#ffd700",border:"none",color:"#000",padding:"0 18px",borderRadius:10,fontWeight:900,fontSize:13,cursor:checking?"not-allowed":"pointer",whiteSpace:"nowrap"}}>{checking?"確認中…":"確認"}</button>
         </div>
         {msg&&<div style={{padding:"10px 14px",borderRadius:8,marginBottom:14,background:msg.type==="ok"?"rgba(46,204,113,0.12)":"rgba(255,60,60,0.1)",border:`1px solid ${msg.type==="ok"?"rgba(46,204,113,0.4)":"rgba(255,60,60,0.3)"}`,color:msg.type==="ok"?"#2ecc71":"#ff6666",fontSize:13}}>{msg.text}</div>}
         <button onClick={apply} style={{width:"100%",background:msg?.type==="ok"?"#2ecc71":"#333",border:"none",color:msg?.type==="ok"?"#000":"#666",padding:"15px",borderRadius:12,fontSize:15,fontWeight:900,cursor:msg?.type==="ok"?"pointer":"not-allowed",marginBottom:10,transition:"all 0.2s"}}>
-          {msg?.type==="ok"?`${BENEFIT_CODES[code.trim().toUpperCase()]?.discount}%OFFを適用する`:"コードを適用する"}
+          {msg?.type==="ok"?`${checkedDiscount}%OFFを適用する`:"コードを適用する"}
         </button>
         <button onClick={onClose} style={{width:"100%",background:"transparent",border:"1px solid #2a2a3a",color:"#555",padding:"12px",borderRadius:12,fontSize:13,cursor:"pointer"}}>閉じる</button>
-        <div style={{marginTop:16,textAlign:"center",color:"#333",fontSize:11}}>デモコード: COIN10・COIN20・VIPCODE</div>
       </div>
     </div>
   );
@@ -2061,6 +2047,7 @@ export default function App(){
   const [phoneVerified,setPhoneVerified]=usePersistedState("phoneVerified",false);
   const [showBenefitModal,setShowBenefitModal]=useState(false);
   const [benefitDiscount,setBenefitDiscount]=usePersistedState("benefitDiscount",0);
+  const [benefitCode,setBenefitCode]=usePersistedState("benefitCode",null);
   const [showAddressModal,setShowAddressModal]=useState(false);
   const [address,setAddress]=usePersistedState("address",null);
   const [showAdminPanel,setShowAdminPanel]=useState(false);
@@ -2351,7 +2338,7 @@ useEffect(()=>{
         {page==="history"&&<WinReportPage user={user} isGuest={isGuest} onRequireLogin={()=>setShowAuthModal(true)}/>}
         {page==="ranking"&&<RankingPage user={user} inviteCount={inviteCount}/>}
 
-        {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit} userId={user?.id}/>}
+        {page==="shop"&&<ShopPage notify={notify} discount={benefitDiscount} benefitCode={benefitCode} onPurchase={(amount)=>issueCoins(amount)} checkLimit={checkMonthlyLimit} ageLimit={ageLimit} userId={user?.id}/>}
 
         {page==="mypage"&&(
           <div style={{fontFamily:"'Noto Sans JP',sans-serif",maxWidth:500,margin:"0 auto"}}>
@@ -2523,7 +2510,7 @@ useEffect(()=>{
       {showContact&&<ContactModal onClose={()=>setShowContact(false)} user={user}/>}
       {showAgeCheck&&<AgeCheckModal onConfirm={(limit)=>{setAgeLimit(limit);setAgeConfirmed(true);setShowAgeCheck(false);if(pendingPurchase){pendingPurchase();setPendingPurchase(null);}}}/>}
       {showPhoneAuth&&<PhoneAuthModal onClose={()=>setShowPhoneAuth(false)} onVerified={()=>{setPhoneVerified(true);notify("電話番号認証が完了しました！");}}/>}
-      {showBenefitModal&&<BenefitCodeModal onClose={()=>setShowBenefitModal(false)} currentDiscount={benefitDiscount} onApply={(pct)=>{setBenefitDiscount(pct);notify(`特典コード適用！コインが${pct}%OFFになりました 🎉`);setShowBenefitModal(false);}}/>}
+      {showBenefitModal&&<BenefitCodeModal onClose={()=>setShowBenefitModal(false)} currentDiscount={benefitDiscount} onApply={(codeStr,pct)=>{setBenefitCode(codeStr);setBenefitDiscount(pct);notify(`特典コード適用！コインが${pct}%OFFになりました 🎉`);setShowBenefitModal(false);}}/>}
       {showAddressModal&&<AddressModal current={address} onClose={()=>setShowAddressModal(false)} onSave={(addr)=>{setAddress(addr);notify("住所を登録しました！");setShowAddressModal(false);}}/>}
       {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED}/>}
 

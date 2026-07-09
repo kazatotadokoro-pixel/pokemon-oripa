@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { adminAuth } from './_firebaseAdmin.js';
+import { adminAuth, adminDb } from './_firebaseAdmin.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -13,9 +13,6 @@ const VALID_PLANS = {
   10000: 10000,
 };
 
-// サーバー側で許可する正規の割引率（フロントのBENEFIT_CODESの値と一致させる）
-const VALID_DISCOUNTS = [10, 20, 30];
-
 const SITE_URL = 'https://oripaluck.jp';
 
 export default async function handler(req, res) {
@@ -23,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { coins, discount, idToken } = req.body;
+  const { coins, code, idToken } = req.body;
 
   // 1. IDトークンの検証（本人確認 + メール認証チェック）
   if (!idToken) {
@@ -49,15 +46,34 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '不正なコインプランです' });
   }
 
-  // 3. 割引率の検証とサーバー側での金額計算
+  // 3. 特典コードの検証とサーバー側での金額計算
+  //    クライアントの言い分（割引率）はそのまま信用せず、Firestoreに登録された
+  //    本物のコードを都度引き直して割引率を決める。
   let finalPrice = basePrice;
   let appliedDiscount = 0;
-  if (discount && discount > 0) {
-    if (!VALID_DISCOUNTS.includes(discount)) {
-      return res.status(400).json({ error: '不正な割引です' });
+  let appliedCode = null;
+  if (code) {
+    const t = String(code).trim().toUpperCase();
+    const codeSnap = await adminDb.collection('benefitCodes').doc(t).get();
+    if (!codeSnap.exists) {
+      return res.status(400).json({ error: 'このコードは無効または期限切れです' });
     }
-    finalPrice = Math.floor(basePrice * (1 - discount / 100));
-    appliedDiscount = discount;
+    const cd = codeSnap.data();
+    if (!cd.active) {
+      return res.status(400).json({ error: 'このコードは無効または期限切れです' });
+    }
+    if (cd.expiresAt && cd.expiresAt.toDate() < new Date()) {
+      return res.status(400).json({ error: 'このコードは期限切れです' });
+    }
+    if (cd.maxUses && (cd.usedCount || 0) >= cd.maxUses) {
+      return res.status(400).json({ error: 'このコードは利用上限に達しました' });
+    }
+    if (cd.perUserOnce && Array.isArray(cd.usedByUsers) && cd.usedByUsers.includes(userId)) {
+      return res.status(400).json({ error: 'このコードはすでに使用済みです' });
+    }
+    finalPrice = Math.floor(basePrice * (1 - cd.discount / 100));
+    appliedDiscount = cd.discount;
+    appliedCode = t;
   }
 
   // 4. サーバーが決めた金額でStripeセッションを作成
@@ -83,6 +99,7 @@ export default async function handler(req, res) {
         userId,
         coins: String(coins),
         discount: String(appliedDiscount),
+        code: appliedCode || '',
       },
     });
 

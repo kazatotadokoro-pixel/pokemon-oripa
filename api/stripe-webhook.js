@@ -44,6 +44,7 @@ export default async function handler(req, res) {
     const session = event.data.object;
     const userId = session.metadata?.userId;
     const coins = parseInt(session.metadata?.coins, 10);
+    const benefitCode = session.metadata?.code || null;
 
     if (!userId || !coins || isNaN(coins)) {
       console.error('metadataが不正:', session.metadata);
@@ -54,6 +55,7 @@ export default async function handler(req, res) {
       // 二重付与を防ぐ: このセッションをまだ処理していない場合のみ付与する
       const eventRef = adminDb.collection('processedSessions').doc(session.id);
       const userRef = adminDb.collection('users').doc(userId);
+      const codeRef = benefitCode ? adminDb.collection('benefitCodes').doc(benefitCode) : null;
 
       await adminDb.runTransaction(async (tx) => {
         const eventSnap = await tx.get(eventRef);
@@ -64,6 +66,9 @@ export default async function handler(req, res) {
         // 購入者のデータを読む(招待報酬の判定に使う)
         const buyerSnap = await tx.get(userRef);
         const buyer = buyerSnap.exists ? buyerSnap.data() : {};
+
+        // 特典コードを使った購入なら、その存在を確認しておく(書き込みはこの後まとめて行う)
+        const codeSnap = codeRef ? await tx.get(codeRef) : null;
 
         // --- 招待報酬の判定 ---
         // 条件: この人が「招待されて登録」しており(invitedBy)、かつ
@@ -102,6 +107,14 @@ export default async function handler(req, res) {
           tx.set(inviterRef, {
             inviteCoins: FieldValue.increment(1),
             inviteCount: FieldValue.increment(1),
+          }, { merge: true });
+        }
+
+        // 特典コードを実際に使用済みにする(決済完了が確定した、この時点で初めて消費する)
+        if (codeRef && codeSnap && codeSnap.exists) {
+          tx.set(codeRef, {
+            usedCount: FieldValue.increment(1),
+            usedByUsers: FieldValue.arrayUnion(userId),
           }, { merge: true });
         }
 
