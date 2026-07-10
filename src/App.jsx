@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, signInWithPhoneNumber } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment, collection, addDoc, deleteDoc, query, orderBy, limit, serverTimestamp, where, getCountFromServer } from "firebase/firestore";
 
 const REAL_CARDS = {
@@ -1820,28 +1820,49 @@ function LegalModal({type,onClose}){
 }
 
 // ===== PhoneAuthModal =====
+// ログイン済みユーザーに、本物のFirebase Phone Authenticationで電話番号をリンクする
 function PhoneAuthModal({onClose,onVerified}){
   const [step,setStep]=useState("phone");
   const [phone,setPhone]=useState("");
   const [code,setCode]=useState("");
-  const [sent,setSent]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
   const [timer,setTimer]=useState(0);
+  const confirmationRef=useRef(null);
   useEffect(()=>{if(timer<=0)return;const t=setTimeout(()=>setTimer(v=>v-1),1000);return()=>clearTimeout(t);},[timer]);
-  const send=()=>{
+  const getVerifier=()=>new RecaptchaVerifier(auth,"recaptcha-container-mypage",{size:"invisible"});
+  const send=async()=>{
     const c=phone.replace(/\D/g,"");
     if(c.length<10||c.length>11){setErr("正しい電話番号を入力してください");return;}
+    if(!auth.currentUser){setErr("ログインが必要です");return;}
     setErr("");setLoading(true);
-    setTimeout(()=>{const d=String(Math.floor(1000+Math.random()*9000));setSent(d);setStep("code");setTimer(60);setLoading(false);},1200);
+    try{
+      const e164="+81"+c.replace(/^0/,"");
+      const verifier=getVerifier();
+      confirmationRef.current=await linkWithPhoneNumber(auth.currentUser,e164,verifier);
+      setStep("code");setTimer(60);
+    }catch(e){
+      setErr(e.code==="auth/credential-already-in-use"?"この電話番号は別のアカウントで使用済みです":"SMSの送信に失敗しました。番号を確認してください");
+    }finally{
+      setLoading(false);
+    }
   };
-  const verify=()=>{
-    if(code.length!==4){setErr("4桁のコードを入力してください");return;}
-    if(code!==sent){setErr("認証コードが違います");return;}
-    setErr("");setStep("done");setTimeout(()=>{onVerified();onClose();},1800);
+  const verify=async()=>{
+    if(code.length!==6){setErr("6桁のコードを入力してください");return;}
+    setErr("");setLoading(true);
+    try{
+      const result=await confirmationRef.current.confirm(code);
+      setStep("done");
+      setTimeout(()=>{onVerified(result.user.phoneNumber);onClose();},1800);
+    }catch(e){
+      setErr("認証コードが違います");
+    }finally{
+      setLoading(false);
+    }
   };
   return(
     <div style={{position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div id="recaptcha-container-mypage"/>
       <div onClick={e=>e.stopPropagation()} style={{background:"#0e0e1a",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:500,border:"1px solid #1a1a2a",fontFamily:"'Noto Sans JP',sans-serif",padding:"28px 24px 44px"}}>
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:4}}><button onClick={onClose} style={{background:"none",border:"none",color:"#555",fontSize:22,cursor:"pointer"}}>✕</button></div>
         {step==="phone"&&(<>
@@ -1861,12 +1882,11 @@ function PhoneAuthModal({onClose,onVerified}){
           <div style={{textAlign:"center",marginBottom:28}}>
             <div style={{fontSize:40,marginBottom:10}}>🔐</div>
             <div style={{color:"#fff",fontWeight:900,fontSize:17}}>認証コードを入力</div>
-            <div style={{color:"#555",fontSize:12,marginTop:6}}>{phone} に送信した4桁のコード</div>
-            <div style={{marginTop:12,background:"rgba(255,215,0,0.08)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:10,padding:"8px 16px",display:"inline-block"}}><span style={{color:"#888",fontSize:11}}>【デモ】認証コード: </span><span style={{color:"#ffd700",fontWeight:900,fontSize:18,letterSpacing:4}}>{sent}</span></div>
+            <div style={{color:"#555",fontSize:12,marginTop:6}}>{phone} に送信した6桁のコード</div>
           </div>
-          <input value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,"").slice(0,4));setErr("");}} placeholder="0000" maxLength={4} style={{width:"100%",background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"16px",color:"#fff",fontSize:24,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:10}}/>
+          <input value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,"").slice(0,6));setErr("");}} placeholder="000000" maxLength={6} style={{width:"100%",background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:10,padding:"16px",color:"#fff",fontSize:24,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:10}}/>
           {err&&<div style={{color:"#ff6666",fontSize:12,marginBottom:10}}>{err}</div>}
-          <button onClick={verify} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"15px",borderRadius:12,fontSize:15,fontWeight:900,cursor:"pointer",marginBottom:10}}>認証する</button>
+          <button onClick={verify} disabled={loading} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"15px",borderRadius:12,fontSize:15,fontWeight:900,cursor:"pointer",marginBottom:10}}>{loading?"確認中...":"認証する"}</button>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <button onClick={()=>setStep("phone")} style={{background:"none",border:"none",color:"#555",fontSize:13,cursor:"pointer"}}>← 番号を変更</button>
             {timer>0?<span style={{color:"#555",fontSize:12}}>{timer}秒後に再送信可能</span>:<button onClick={send} style={{background:"none",border:"none",color:"#60b8ff",fontSize:13,cursor:"pointer"}}>再送信</button>}
@@ -1880,14 +1900,13 @@ function PhoneAuthModal({onClose,onVerified}){
 
 // ===== AuthScreen =====
 function AuthScreen({onLogin}){
-  const [mode,setMode]=useState("top"); // top / login / register / phone / phoneCode
+  const [mode,setMode]=useState("top"); // top / login / register / registerPhone / registerPhoneCode / phone / phoneCode
   const [email,setEmail]=useState("");
   const [pass,setPass]=useState("");
   const [name,setName]=useState("");
   const [phone,setPhone]=useState("");
   const [code,setCode]=useState("");
   const [inviteInput,setInviteInput]=useState("");
-  const [sentCode,setSentCode]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
   const [timer,setTimer]=useState(0);
@@ -1904,63 +1923,123 @@ function AuthScreen({onLogin}){
     if(!email||!pass){setErr("メールアドレスとパスワードを入力してください");return;}
     setLoading(true);
     signInWithEmailAndPassword(auth,email,pass)
-      .then(cred=>{onLogin({name:cred.user.displayName||email,email:cred.user.email,id:cred.user.uid,emailVerified:cred.user.emailVerified});})
+      .then(async cred=>{
+        // 電話番号未リンク、かつユーザードキュメントも無い(=登録が電話番号認証の途中で
+        // 中断されたアカウント)場合は、続きから電話番号認証をやり直させる
+        if(!cred.user.phoneNumber){
+          const snap=await getDoc(doc(db,"users",cred.user.uid));
+          if(!snap.exists()){
+            setErr("");
+            setName(cred.user.displayName||"");
+            setMode("registerPhone");
+            return;
+          }
+        }
+        onLogin({name:cred.user.displayName||email,email:cred.user.email,id:cred.user.uid,emailVerified:cred.user.emailVerified,phone:cred.user.phoneNumber});
+      })
       .catch(e=>{setErr("メールアドレスまたはパスワードが違います");})
       .finally(()=>setLoading(false));
   };
 
+  const confirmationRef=useRef(null);
+  const getVerifier=(id)=>new RecaptchaVerifier(auth,id,{size:"invisible"});
+
+  // 新規登録は「電話番号認証が必須」。まず入力内容を確認して電話番号入力ステップへ進む
   const handleRegister=()=>{
     setErr("");
     if(!name||!email||!pass){setErr("すべての項目を入力してください");return;}
     if(pass.length<6){setErr("パスワードは6文字以上にしてください");return;}
-    setLoading(true);
-    createUserWithEmailAndPassword(auth,email,pass)
-      .then(async(cred)=>{
-        const uid=cred.user.uid;
-        // このユーザー固有の招待コードを発行(名前の頭3文字 + ランダム4文字)
-        const myCode=(name||"USER").replace(/[^A-Za-z0-9]/g,"").slice(0,3).toUpperCase().padEnd(3,"X")+Math.random().toString(36).slice(2,6).toUpperCase();
-        // 入力された招待コードがあれば、その持ち主(招待者)を探す
-        let invitedBy=null;
-        const entered=inviteInput.trim().toUpperCase();
-        if(entered){
-          try{
-            const snap=await getDoc(doc(db,"inviteCodes",entered));
-            if(snap.exists()){
-              const owner=snap.data().userId;
-              if(owner&&owner!==uid) invitedBy=owner; // 自分のコードは無効
-            }
-          }catch(e){}
-        }
-        // ユーザーデータを保存(招待された場合はinvitedByを記録。報酬は初回課金時にサーバーが付与)
-        const userData={name,email,coins:1250,inviteCoins:0,inviteCount:0,myInviteCode:myCode,createdAt:new Date().toISOString()};
-        if(invitedBy) userData.invitedBy=invitedBy;
-        await setDoc(doc(db,"users",uid),userData);
-        // 招待コード→自分のIDの対応をFirestoreに登録(他の人が使えるように)
-        await setDoc(doc(db,"inviteCodes",myCode),{userId:uid,createdAt:new Date().toISOString()});
-        sendEmailVerification(cred.user).then(()=>alert("確認メールを送信しました。メールのリンクから認証を完了してください。")).catch(()=>{});
-        onLogin({name,email:cred.user.email,id:uid,emailVerified:cred.user.emailVerified});
-      })
-      .catch(e=>{setErr("このメールアドレスはすでに使われています");})
-      .finally(()=>setLoading(false));
+    setMode("registerPhone");
   };
 
-  const sendPhone=()=>{
+  // 新規登録用: メール/パスワードでアカウントを作成し(未作成の場合)、続けて電話番号をリンクするためのSMSを送信する
+  const sendRegisterPhone=async()=>{
     const cleaned=phone.replace(/\D/g,"");
     if(cleaned.length<10||cleaned.length>11){setErr("正しい電話番号を入力してください");return;}
     setErr("");setLoading(true);
-    setTimeout(()=>{
-      const d=String(Math.floor(1000+Math.random()*9000));
-      setSentCode(d);setMode("phoneCode");setTimer(60);setLoading(false);
-    },1200);
+    try{
+      // すでにサインイン中(ログイン経由で戻ってきた場合)ならアカウントを再作成しない
+      const user=auth.currentUser||(await createUserWithEmailAndPassword(auth,email,pass)).user;
+      const e164="+81"+cleaned.replace(/^0/,"");
+      const verifier=getVerifier("recaptcha-container-register");
+      confirmationRef.current=await linkWithPhoneNumber(user,e164,verifier);
+      setMode("registerPhoneCode");setTimer(60);
+    }catch(e){
+      if(e.code==="auth/email-already-in-use"){setErr("このメールアドレスはすでに使われています");setMode("register");}
+      else if(e.code==="auth/credential-already-in-use"){setErr("この電話番号は別のアカウントで使用済みです");}
+      else{setErr("SMSの送信に失敗しました。番号を確認してください");}
+    }finally{
+      setLoading(false);
+    }
   };
 
-  const verifyPhone=()=>{
-    if(code!==sentCode){setErr("認証コードが違います");return;}
-    setLoading(true);
-    setTimeout(()=>{
-      onLogin({name:"ユーザー"+phone.slice(-4),phone,id:"TEL-"+Math.random().toString(36).slice(2,8).toUpperCase()});
+  // 新規登録用: SMSコードを確認し、電話番号リンク完了後にユーザーデータを作成する
+  const verifyRegisterPhone=async()=>{
+    if(code.length!==6){setErr("6桁のコードを入力してください");return;}
+    setErr("");setLoading(true);
+    try{
+      const result=await confirmationRef.current.confirm(code);
+      const uid=result.user.uid;
+      const myCode=(name||"USER").replace(/[^A-Za-z0-9]/g,"").slice(0,3).toUpperCase().padEnd(3,"X")+Math.random().toString(36).slice(2,6).toUpperCase();
+      let invitedBy=null;
+      const entered=inviteInput.trim().toUpperCase();
+      if(entered){
+        try{
+          const snap=await getDoc(doc(db,"inviteCodes",entered));
+          if(snap.exists()){
+            const owner=snap.data().userId;
+            if(owner&&owner!==uid) invitedBy=owner;
+          }
+        }catch(e){}
+      }
+      const userData={name,email,coins:1250,inviteCoins:0,inviteCount:0,myInviteCode:myCode,createdAt:new Date().toISOString()};
+      if(invitedBy) userData.invitedBy=invitedBy;
+      await setDoc(doc(db,"users",uid),userData);
+      await setDoc(doc(db,"inviteCodes",myCode),{userId:uid,createdAt:new Date().toISOString()});
+      sendEmailVerification(result.user).then(()=>alert("確認メールを送信しました。メールのリンクから認証を完了してください。")).catch(()=>{});
+      onLogin({name,email:result.user.email,id:uid,emailVerified:result.user.emailVerified,phone:result.user.phoneNumber});
+    }catch(e){
+      setErr("認証コードが違います");
+    }finally{
       setLoading(false);
-    },800);
+    }
+  };
+
+  // 「電話番号で続ける」: 電話番号だけで本物のFirebaseアカウントにサインインする
+  const sendPhone=async()=>{
+    const cleaned=phone.replace(/\D/g,"");
+    if(cleaned.length<10||cleaned.length>11){setErr("正しい電話番号を入力してください");return;}
+    setErr("");setLoading(true);
+    try{
+      const e164="+81"+cleaned.replace(/^0/,"");
+      const verifier=getVerifier("recaptcha-container-phonelogin");
+      confirmationRef.current=await signInWithPhoneNumber(auth,e164,verifier);
+      setMode("phoneCode");setTimer(60);
+    }catch(e){
+      setErr("SMSの送信に失敗しました。番号を確認してください");
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  const verifyPhone=async()=>{
+    if(code.length!==6){setErr("6桁のコードを入力してください");return;}
+    setErr("");setLoading(true);
+    try{
+      const cred=await confirmationRef.current.confirm(code);
+      const uid=cred.user.uid;
+      const existing=await getDoc(doc(db,"users",uid));
+      if(!existing.exists()){
+        const myCode=("USER").padEnd(3,"X")+Math.random().toString(36).slice(2,6).toUpperCase();
+        await setDoc(doc(db,"users",uid),{name:"ユーザー"+(cred.user.phoneNumber||"").slice(-4),phone:cred.user.phoneNumber,coins:1250,inviteCoins:0,inviteCount:0,myInviteCode:myCode,createdAt:new Date().toISOString()});
+        await setDoc(doc(db,"inviteCodes",myCode),{userId:uid,createdAt:new Date().toISOString()});
+      }
+      onLogin({name:"ユーザー"+(cred.user.phoneNumber||"").slice(-4),phone:cred.user.phoneNumber,id:uid});
+    }catch(e){
+      setErr("認証コードが違います");
+    }finally{
+      setLoading(false);
+    }
   };
 
   const BG="linear-gradient(160deg,#06060e,#0a0a1a,#060610)";
@@ -2032,7 +2111,7 @@ function AuthScreen({onLogin}){
               <input value={inviteInput} onChange={e=>{setInviteInput(e.target.value.toUpperCase());setErr("");}} placeholder="招待コード（任意）" style={{...inputStyle,letterSpacing:2}}/>
               {err&&<div style={{color:"#ff6666",fontSize:12,padding:"8px 12px",background:"rgba(255,60,60,0.1)",borderRadius:8}}>{err}</div>}
               <button onClick={handleRegister} disabled={loading} style={{...btnStyle,background:loading?"#555":"#d94f6e"}}>
-                {loading?"登録中...":"登録してはじめる"}
+                次へ（電話番号認証）
               </button>
               <div style={{color:"#444",fontSize:10,textAlign:"center",lineHeight:1.6}}>登録することで利用規約・プライバシーポリシーに同意したものとみなします</div>
               <button onClick={()=>{setMode("login");setErr("");}} style={subBtnStyle}>すでにアカウントをお持ちの方</button>
@@ -2040,9 +2119,43 @@ function AuthScreen({onLogin}){
           </div>
         )}
 
+        {/* 新規登録: 電話番号認証（必須） */}
+        {mode==="registerPhone"&&(
+          <div style={{padding:"32px 24px"}}>
+            <div id="recaptcha-container-register"/>
+            <button onClick={()=>{setMode("register");setErr("");}} style={{background:"none",border:"none",color:"#555",fontSize:20,cursor:"pointer",marginBottom:16}}>←</button>
+            <div style={{textAlign:"center",marginBottom:24}}><div style={{fontSize:36,marginBottom:8}}>📱</div><div style={{color:"#fff",fontWeight:900,fontSize:18}}>電話番号認証（必須）</div><div style={{color:"#555",fontSize:12,marginTop:4}}>不正利用防止のため、登録には電話番号認証が必要です</div></div>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <div style={{background:"#1a1a2a",border:"1px solid #2a2a3a",borderRadius:12,padding:"14px",color:"#888",fontSize:14,flexShrink:0}}>🇯🇵 +81</div>
+              <input value={phone} onChange={e=>{setPhone(e.target.value);setErr("");}} placeholder="09012345678" maxLength={11} style={{...inputStyle,margin:0}}/>
+            </div>
+            {err&&<div style={{color:"#ff6666",fontSize:12,marginBottom:10,padding:"8px 12px",background:"rgba(255,60,60,0.1)",borderRadius:8}}>{err}</div>}
+            <button onClick={sendRegisterPhone} disabled={loading} style={{...btnStyle,background:loading?"#555":"#d94f6e"}}>{loading?"送信中...":"認証コードを送信"}</button>
+          </div>
+        )}
+
+        {/* 新規登録: 電話番号コード確認 */}
+        {mode==="registerPhoneCode"&&(
+          <div style={{padding:"32px 24px"}}>
+            <div style={{textAlign:"center",marginBottom:24}}>
+              <div style={{fontSize:36,marginBottom:8}}>🔐</div>
+              <div style={{color:"#fff",fontWeight:900,fontSize:18}}>認証コードを入力</div>
+              <div style={{color:"#555",fontSize:12,marginTop:4}}>{phone} に送信した6桁のコード</div>
+            </div>
+            <input value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,"").slice(0,6));setErr("");}} placeholder="000000" maxLength={6} style={{...inputStyle,fontSize:24,textAlign:"center",letterSpacing:8,marginBottom:10}}/>
+            {err&&<div style={{color:"#ff6666",fontSize:12,marginBottom:10,padding:"8px 12px",background:"rgba(255,60,60,0.1)",borderRadius:8}}>{err}</div>}
+            <button onClick={verifyRegisterPhone} disabled={loading} style={{...btnStyle,background:loading?"#555":"#d94f6e"}}>{loading?"確認中...":"認証して登録を完了する"}</button>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
+              <span/>
+              {timer>0?<span style={{color:"#555",fontSize:12}}>{timer}秒後に再送信</span>:<button onClick={sendRegisterPhone} style={{background:"none",border:"none",color:"#60b8ff",fontSize:13,cursor:"pointer"}}>再送信</button>}
+            </div>
+          </div>
+        )}
+
         {/* 電話番号 */}
         {mode==="phone"&&(
           <div style={{padding:"32px 24px"}}>
+            <div id="recaptcha-container-phonelogin"/>
             <button onClick={()=>{setMode("top");setErr("");}} style={{background:"none",border:"none",color:"#555",fontSize:20,cursor:"pointer",marginBottom:16}}>←</button>
             <div style={{textAlign:"center",marginBottom:24}}><div style={{fontSize:36,marginBottom:8}}>📱</div><div style={{color:"#fff",fontWeight:900,fontSize:18}}>電話番号で登録</div><div style={{color:"#555",fontSize:12,marginTop:4}}>SMSで認証コードを送ります</div></div>
             <div style={{display:"flex",gap:8,marginBottom:10}}>
@@ -2061,13 +2174,9 @@ function AuthScreen({onLogin}){
             <div style={{textAlign:"center",marginBottom:24}}>
               <div style={{fontSize:36,marginBottom:8}}>🔐</div>
               <div style={{color:"#fff",fontWeight:900,fontSize:18}}>認証コードを入力</div>
-              <div style={{color:"#555",fontSize:12,marginTop:4}}>{phone} に送信した4桁のコード</div>
-              <div style={{marginTop:12,background:"rgba(255,215,0,0.08)",border:"1px solid rgba(255,215,0,0.2)",borderRadius:10,padding:"8px 16px",display:"inline-block"}}>
-                <span style={{color:"#888",fontSize:11}}>【デモ】認証コード: </span>
-                <span style={{color:"#ffd700",fontWeight:900,fontSize:18,letterSpacing:4}}>{sentCode}</span>
-              </div>
+              <div style={{color:"#555",fontSize:12,marginTop:4}}>{phone} に送信した6桁のコード</div>
             </div>
-            <input value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,"").slice(0,4));setErr("");}} placeholder="0000" maxLength={4} style={{...inputStyle,fontSize:24,textAlign:"center",letterSpacing:8,marginBottom:10}}/>
+            <input value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,"").slice(0,6));setErr("");}} placeholder="000000" maxLength={6} style={{...inputStyle,fontSize:24,textAlign:"center",letterSpacing:8,marginBottom:10}}/>
             {err&&<div style={{color:"#ff6666",fontSize:12,marginBottom:10,padding:"8px 12px",background:"rgba(255,60,60,0.1)",borderRadius:8}}>{err}</div>}
             <button onClick={verifyPhone} disabled={loading} style={{...btnStyle,background:loading?"#555":"#d94f6e"}}>{loading?"確認中...":"認証する"}</button>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
@@ -2097,8 +2206,17 @@ function initDeck(){
 export default function App(){
   const [user,setUser]=useState(null);
   useEffect(()=>{
-    const unsub=auth.onAuthStateChanged(u=>{
-     if(u)setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified});
+    const unsub=auth.onAuthStateChanged(async u=>{
+     if(u){
+       // 電話番号が未リンクで、かつユーザードキュメントも無い場合は、
+       // 新規登録が電話番号認証の途中で中断された「宙ぶらりん」アカウントなので
+       // メイン画面には入れない(AuthScreen側で電話番号認証をやり直す)
+       if(!u.phoneNumber){
+         const snap=await getDoc(doc(db,"users",u.uid));
+         if(!snap.exists()){ setUser(null); return; }
+       }
+       setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified,phone:u.phoneNumber});
+     }
       else setUser(null);
     });
     return()=>unsub();
@@ -2153,7 +2271,6 @@ export default function App(){
   const loginBonusAutoShown=useRef(false);
   const [rank]=useState(42);
   const [showPhoneAuth,setShowPhoneAuth]=useState(false);
-  const [phoneVerified,setPhoneVerified]=usePersistedState("phoneVerified",false);
   const [showBenefitModal,setShowBenefitModal]=useState(false);
   const [benefitDiscount,setBenefitDiscount]=usePersistedState("benefitDiscount",0);
   const [benefitCode,setBenefitCode]=usePersistedState("benefitCode",null);
@@ -2448,7 +2565,7 @@ useEffect(()=>{
       {label:"アカウント",right:<span style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:isGuest?"#555":"#ccc",fontSize:13}}>{isGuest?"未登録":user?.name}</span><span style={{fontSize:22}}>{isGuest?"👤":"👤"}</span></span>,onPress:isGuest,action:isGuest?()=>setShowAuthModal(true):undefined},
       {label:"ユーザーID",right:<span style={{color:"#888",fontSize:11,letterSpacing:0.5}}>{isGuest?"未登録":user?.id}</span>,onPress:false},
       {label:"年齢区分",right:<span style={{color:ageLimit?.monthly?ageLimit.age<=14?"#60b8ff":"#ffd700":"#2ecc71",fontSize:12,fontWeight:700}}>{ageLimit?.label||"未設定"}{ageLimit?.monthly?` (月¥${ageLimit.monthly.toLocaleString()}まで)`:""}</span>,onPress:false},
-      {label:"電話番号認証",right:phoneVerified?<span style={{color:"#2ecc71",fontSize:13,fontWeight:700}}>認証済み</span>:<span style={{color:"#d94f6e",fontSize:13,fontWeight:700}}>未認証 ›</span>,onPress:!phoneVerified,action:()=>setShowPhoneAuth(true)},
+      {label:"電話番号認証",right:user?.phone?<span style={{color:"#2ecc71",fontSize:13,fontWeight:700}}>認証済み</span>:<span style={{color:"#d94f6e",fontSize:13,fontWeight:700}}>未認証 ›</span>,onPress:!user?.phone,action:()=>setShowPhoneAuth(true)},
       {label:"メールアドレス",right:"›",onPress:true},
       {label:"送付先設定",right:address?<span style={{color:"#2ecc71",fontSize:12}}>登録済み ›</span>:"›",onPress:true,action:()=>setShowAddressModal(true)},
       {label:"特典コード入力",right:benefitDiscount>0?<span style={{color:"#2ecc71",fontSize:13,fontWeight:700}}>{benefitDiscount}%OFF適用中</span>:"›",onPress:true,action:()=>setShowBenefitModal(true)},
@@ -2727,7 +2844,7 @@ useEffect(()=>{
       {showInvite&&<InviteModal onClose={()=>setShowInvite(false)} user={user} myInviteCode={myInviteCode} inviteCount={inviteCount} inviteCoins={inviteCoins}/>}
       {showContact&&<ContactModal onClose={()=>setShowContact(false)} user={user}/>}
       {showAgeCheck&&<AgeCheckModal onConfirm={(limit)=>{setAgeLimit(limit);setAgeConfirmed(true);setShowAgeCheck(false);if(pendingPurchase){pendingPurchase();setPendingPurchase(null);}}}/>}
-      {showPhoneAuth&&<PhoneAuthModal onClose={()=>setShowPhoneAuth(false)} onVerified={()=>{setPhoneVerified(true);notify("電話番号認証が完了しました！");}}/>}
+      {showPhoneAuth&&<PhoneAuthModal onClose={()=>setShowPhoneAuth(false)} onVerified={(phoneNumber)=>{setUser(prev=>prev?{...prev,phone:phoneNumber}:prev);notify("電話番号認証が完了しました！");}}/>}
       {showBenefitModal&&<BenefitCodeModal onClose={()=>setShowBenefitModal(false)} currentDiscount={benefitDiscount} onApply={(codeStr,pct)=>{setBenefitCode(codeStr);setBenefitDiscount(pct);notify(`特典コード適用！コインが${pct}%OFFになりました 🎉`);setShowBenefitModal(false);}}/>}
       {showAddressModal&&<AddressModal current={address} onClose={()=>setShowAddressModal(false)} onSave={(addr)=>{setAddress(addr);notify("住所を登録しました！");setShowAddressModal(false);}}/>}
       {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED} onSendMessage={sendAdminMessage}/>}
