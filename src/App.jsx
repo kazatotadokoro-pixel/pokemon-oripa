@@ -2668,15 +2668,24 @@ useEffect(()=>{
                       <span style={{fontWeight:900,fontSize:20,color:"#111"}}>{coinVal}</span>
                     </div>
                     {rank!=="ハズレ"&&<div style={{display:"inline-block",background:rank==="1等"?"linear-gradient(135deg,#ffd700,#ff9020)":rank==="2等"?"linear-gradient(135deg,#ffd700,#b8860b)":"linear-gradient(135deg,#60b8ff,#1a5fc8)",borderRadius:20,padding:"2px 10px",color:"#000",fontWeight:900,fontSize:11}}>{rank}</div>}
+                    {!card.cardId&&<div style={{marginTop:6,color:"#c0392b",fontSize:11}}>⚠️ 処理できないカードです（記録が見つかりません）</div>}
                   </div>
-                  <button onClick={async()=>{
-                    const result=await serverRedeem([card.cardId]);
-                    if(!result){return;}
-                    setPendingCards(p=>p.filter((_,j)=>j!==i));
-                    setCheckedPending(p=>{const next=new Set();p.forEach(j=>{if(j<i)next.add(j);else if(j>i)next.add(j-1);});return next;});
-                    setCoins(result.coins);
-                    notify(`+${result.gained.toLocaleString()}コイン 還元しました！🪙`);
-                  }} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>還元</button>
+                  {card.cardId?(
+                    <button onClick={async()=>{
+                      const result=await serverRedeem([card.cardId]);
+                      if(!result){return;}
+                      setPendingCards(p=>p.filter((_,j)=>j!==i));
+                      setCheckedPending(p=>{const next=new Set();p.forEach(j=>{if(j<i)next.add(j);else if(j>i)next.add(j-1);});return next;});
+                      setCoins(result.coins);
+                      notify(`+${result.gained.toLocaleString()}コイン 還元しました！🪙`);
+                    }} style={{background:"#d94f6e",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>還元</button>
+                  ):(
+                    <button onClick={()=>{
+                      setPendingCards(p=>p.filter((_,j)=>j!==i));
+                      setCheckedPending(p=>{const next=new Set();p.forEach(j=>{if(j<i)next.add(j);else if(j>i)next.add(j-1);});return next;});
+                      notify("リストから削除しました");
+                    }} style={{background:"#666",border:"none",color:"#fff",padding:"8px 14px",borderRadius:20,fontWeight:900,fontSize:12,cursor:"pointer",flexShrink:0}}>削除</button>
+                  )}
                 </div>
               );
             })}
@@ -2703,12 +2712,12 @@ useEffect(()=>{
                 const result=await serverRedeem(ids);
                 if(!result){return;}
                 setCoins(result.coins);
-                setPendingCards([]);
+                setPendingCards(p=>p.filter(c=>!c.cardId)); // IDのないカード（処理できない）は残す
                 setCheckedPending(new Set());
-                notify(`+${result.gained.toLocaleString()}コイン 全て還元しました！🪙`);
-                setShowPendingCards(false);
+                notify(`+${result.gained.toLocaleString()}コイン 還元しました！🪙`);
+                if(pendingCards.every(c=>c.cardId))setShowPendingCards(false);
               }} style={{width:"100%",background:"#d94f6e",border:"none",color:"#fff",padding:"16px",borderRadius:30,fontWeight:900,fontSize:16,cursor:"pointer"}}>
-                全て還元する（{pendingCards.length}枚）
+                全て還元する（{pendingCards.filter(c=>c.cardId).length}枚）
               </button>
             </div>
           )}
