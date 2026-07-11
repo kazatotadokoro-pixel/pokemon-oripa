@@ -2789,7 +2789,7 @@ useEffect(()=>{
               </button>
             </div>
                 <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:20,padding:"5px 12px"}}><span style={{fontSize:14}}>🪙</span><span style={{color:"#ffd700",fontWeight:900,fontSize:14}}>{isGuest?"0":coins.toLocaleString()}</span><button onClick={()=>isGuest?setShowAuthModal(true):setPage("shop")} style={{background:"#ffd700",border:"none",color:"#000",width:18,height:18,borderRadius:"50%",fontSize:12,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button></div>
-                <div style={{width:36,height:36,borderRadius:"50%",background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>👑</div>
+                <button onClick={()=>setPage("ranking")} title="ランキングを見る" style={{width:36,height:36,borderRadius:"50%",background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,cursor:"pointer"}}>👑</button>
               </div>
             </div>
             {!isGuest&&(()=>{
