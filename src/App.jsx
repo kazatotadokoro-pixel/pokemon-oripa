@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, signInWithPhoneNumber } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, signInWithPhoneNumber, GoogleAuthProvider, signInWithPopup, linkWithPopup } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment, collection, addDoc, deleteDoc, query, orderBy, limit, serverTimestamp, where, getCountFromServer } from "firebase/firestore";
 
 const REAL_CARDS = {
@@ -1941,6 +1941,28 @@ function AuthScreen({onLogin}){
       .finally(()=>setLoading(false));
   };
 
+  // Googleでログイン/新規登録。新規の場合は電話番号認証(必須)へ進む
+  const handleGoogleSignIn=async()=>{
+    setErr("");setLoading(true);
+    try{
+      const provider=new GoogleAuthProvider();
+      const cred=await signInWithPopup(auth,provider);
+      const uid=cred.user.uid;
+      const existing=await getDoc(doc(db,"users",uid));
+      if(existing.exists()){
+        onLogin({name:existing.data().name||cred.user.displayName,email:cred.user.email,id:uid,emailVerified:cred.user.emailVerified,phone:cred.user.phoneNumber});
+      }else{
+        setName(cred.user.displayName||"");
+        setEmail(cred.user.email||"");
+        setMode("registerPhone");
+      }
+    }catch(e){
+      if(e.code!=="auth/popup-closed-by-user") setErr("Googleログインに失敗しました");
+    }finally{
+      setLoading(false);
+    }
+  };
+
   const confirmationRef=useRef(null);
   const getVerifier=(id)=>new RecaptchaVerifier(auth,id,{size:"invisible"});
 
@@ -1996,7 +2018,9 @@ function AuthScreen({onLogin}){
       if(invitedBy) userData.invitedBy=invitedBy;
       await setDoc(doc(db,"users",uid),userData);
       await setDoc(doc(db,"inviteCodes",myCode),{userId:uid,createdAt:new Date().toISOString()});
-      sendEmailVerification(result.user).then(()=>alert("確認メールを送信しました。メールのリンクから認証を完了してください。")).catch(()=>{});
+      if(!result.user.emailVerified){
+        sendEmailVerification(result.user).then(()=>alert("確認メールを送信しました。メールのリンクから認証を完了してください。")).catch(()=>{});
+      }
       onLogin({name,email:result.user.email,id:uid,emailVerified:result.user.emailVerified,phone:result.user.phoneNumber});
     }catch(e){
       setErr("認証コードが違います");
@@ -2072,6 +2096,9 @@ function AuthScreen({onLogin}){
               <button onClick={()=>{setMode("register");setErr("");}} style={{...subBtnStyle,marginTop:0,color:"#60b8ff",borderColor:"#60b8ff33"}}>新規登録（無料）</button>
               <div style={{display:"flex",alignItems:"center",gap:10,margin:"8px 0"}}><div style={{flex:1,height:1,background:"#1a1a2a"}}/><span style={{color:"#333",fontSize:12}}>または</span><div style={{flex:1,height:1,background:"#1a1a2a"}}/></div>
               <button onClick={()=>{setMode("phone");setErr("");}} style={{...subBtnStyle,marginTop:0}}>📱 電話番号で続ける</button>
+              <button disabled={loading} onClick={handleGoogleSignIn} style={{...subBtnStyle,marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                <span style={{fontWeight:900}}>G</span> Googleで続ける
+              </button>
               <button onClick={()=>onLogin({name:"ゲスト",id:"GUEST-"+Math.random().toString(36).slice(2,6).toUpperCase(),isGuest:true})} style={{background:"transparent",border:"none",color:"#444",fontSize:12,cursor:"pointer",padding:"8px",marginTop:4}}>ゲストとして続ける（機能制限あり）</button>
             </div>
             {/* デモ用ヒント */}
@@ -2215,7 +2242,7 @@ export default function App(){
          const snap=await getDoc(doc(db,"users",u.uid));
          if(!snap.exists()){ setUser(null); return; }
        }
-       setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified,phone:u.phoneNumber});
+       setUser({name:u.displayName||u.email,email:u.email,id:u.uid,emailVerified:u.emailVerified,phone:u.phoneNumber,googleLinked:u.providerData.some(p=>p.providerId==="google.com")});
      }
       else setUser(null);
     });
@@ -2473,6 +2500,18 @@ useEffect(()=>{
   const packs=PACKS.map(p=>({...p,remaining:remainings[p.id]}));
   const notify=(msg)=>{setNotification(msg);setTimeout(()=>setNotification(null),2200);};
 
+  // マイページから既存アカウントにGoogleを連携する(電話番号認証は登録時に完了済みの前提)
+  const linkGoogleAccount=async()=>{
+    try{
+      await linkWithPopup(auth.currentUser,new GoogleAuthProvider());
+      setUser(prev=>prev?{...prev,googleLinked:true}:prev);
+      notify("Googleアカウントを連携しました");
+    }catch(e){
+      if(e.code==="auth/credential-already-in-use") notify("このGoogleアカウントは別のアカウントで使用済みです");
+      else if(e.code!=="auth/popup-closed-by-user") notify("連携に失敗しました");
+    }
+  };
+
   // ===== サーバー抽選 連携 =====
   // カード名→画像 の対応表（当たりカードの画像を名前で引く）
   const IMG_BY_NAME = (() => {
@@ -2570,8 +2609,7 @@ useEffect(()=>{
       {label:"送付先設定",right:address?<span style={{color:"#2ecc71",fontSize:12}}>登録済み ›</span>:"›",onPress:true,action:()=>setShowAddressModal(true)},
       {label:"特典コード入力",right:benefitDiscount>0?<span style={{color:"#2ecc71",fontSize:13,fontWeight:700}}>{benefitDiscount}%OFF適用中</span>:"›",onPress:true,action:()=>setShowBenefitModal(true)},
       {label:"友達招待",right:"›",onPress:true,action:()=>isGuest?setShowAuthModal(true):setShowInvite(true)},
-      {label:"LINE連携",right:<span style={{color:"#2ecc71",fontSize:13,fontWeight:700}}>連携済み</span>,onPress:false},
-      {label:<span>アカウント連携 <span style={{fontSize:13}}>G 🍎</span></span>,right:"›",onPress:true},
+      {label:<span>アカウント連携 <span style={{fontSize:13}}>G</span></span>,right:user?.googleLinked?<span style={{color:"#2ecc71",fontSize:13,fontWeight:700}}>連携済み</span>:"›",onPress:!user?.googleLinked&&!isGuest,action:linkGoogleAccount},
       {label:isGuest?"ログイン / 新規登録":"ログアウト",right:"›",onPress:true,danger:!isGuest,action:isGuest?()=>setShowAuthModal(true):()=>{setUser(null);setPage("home");}},
     ]},
     {title:"サポート",items:[
