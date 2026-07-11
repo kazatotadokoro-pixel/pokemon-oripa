@@ -885,7 +885,8 @@ function ShopPage({notify,discount=0,benefitCode=null,onPurchase,checkLimit,ageL
           body:JSON.stringify({coins:modal.coins,code:benefitCode||null,idToken})
         });
         const data=await res.json();
-        if(data.url){window.location.href=data.url;}
+        if(data.freeGrant){setModal(null);notify(`${data.coins.toLocaleString()}コインを付与しました！`);}
+        else if(data.url){window.location.href=data.url;}
         else{alert(data.error||"決済エラーが発生しました");}
       }catch(e){alert("決済エラーが発生しました");}
     };

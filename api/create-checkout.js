@@ -1,5 +1,7 @@
 import Stripe from 'stripe';
 import { adminAuth, adminDb } from './_firebaseAdmin.js';
+import { FieldValue } from 'firebase-admin/firestore';
+import { computeRankGrant } from './_rankGrant.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -78,9 +80,41 @@ export default async function handler(req, res) {
     if (cd.perUserOnce && Array.isArray(cd.usedByUsers) && cd.usedByUsers.includes(userId)) {
       return res.status(400).json({ error: 'このコードはすでに使用済みです' });
     }
+    if (Array.isArray(cd.allowedUserIds) && !cd.allowedUserIds.includes(userId)) {
+      return res.status(403).json({ error: 'このコードは使用できません' });
+    }
     finalPrice = Math.floor(basePrice * (1 - cd.discount / 100));
     appliedDiscount = cd.discount;
     appliedCode = t;
+  }
+
+  // 3.5 100%OFF(¥0)の場合、Stripeは¥0の決済セッションを作れないため、
+  //     決済をスキップして直接コインを付与する(オーナー専用コードなどを想定)
+  if (finalPrice === 0) {
+    try {
+      const userRef = adminDb.collection('users').doc(userId);
+      const codeRef = adminDb.collection('benefitCodes').doc(appliedCode);
+      let granted = 0;
+      await adminDb.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        const buyer = userSnap.exists ? userSnap.data() : {};
+        const { bonusCoins, rankUpBonusCoins, rankUpdates } = computeRankGrant(buyer, coins);
+        granted = coins + bonusCoins + rankUpBonusCoins;
+        tx.set(userRef, {
+          coins: FieldValue.increment(granted),
+          totalIssued: FieldValue.increment(coins),
+          ...rankUpdates,
+        }, { merge: true });
+        tx.set(codeRef, {
+          usedCount: FieldValue.increment(1),
+          usedByUsers: FieldValue.arrayUnion(userId),
+        }, { merge: true });
+      });
+      return res.status(200).json({ url: null, freeGrant: true, coins: granted });
+    } catch (err) {
+      console.error('無料付与エラー:', err);
+      return res.status(500).json({ error: 'コインの付与に失敗しました' });
+    }
   }
 
   // 4. サーバーが決めた金額でStripeセッションを作成
