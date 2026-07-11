@@ -5,6 +5,27 @@ import { FieldValue } from 'firebase-admin/firestore';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+// 会員ランク制度。src/App.jsx の同名定義(RANK_TIERS/PREMIUM_RANK)と合わせて変更すること。
+// ランクは購入前(このイベントを処理する前)の累計課金額(totalIssued)で判定し、
+// 今回の購入分やボーナス分はそのランク判定には影響させない。
+const RANK_TIERS = [
+  { name: "スタンダード会員", threshold: 0, bonusRate: 0 },
+  { name: "ブロンズ", threshold: 100000, bonusRate: 1 },
+  { name: "シルバー", threshold: 200000, bonusRate: 2 },
+  { name: "ゴールド", threshold: 800000, bonusRate: 3 },
+  { name: "プラチナ", threshold: 1600000, bonusRate: 4 },
+  { name: "ダイヤモンド", threshold: 3000000, bonusRate: 5 },
+];
+const PREMIUM_BONUS_RATE = 10;
+function getBonusRate(totalIssued, premiumRank) {
+  if (premiumRank) return PREMIUM_BONUS_RATE;
+  let rate = 0;
+  for (const t of RANK_TIERS) {
+    if (totalIssued >= t.threshold) rate = t.bonusRate;
+  }
+  return rate;
+}
+
 // Stripe Webhookは生のリクエストボディ（raw body）で署名検証する必要があるため、
 // Vercelの自動JSONパースを無効化する
 export const config = {
@@ -90,9 +111,13 @@ export default async function handler(req, res) {
           }
         }
 
-        // 購入コインを加算
+        // 会員ランクのボーナスコインを計算(購入前の累計課金額で判定。ボーナス分はtotalIssuedに加算しない)
+        const bonusRate = getBonusRate(buyer.totalIssued || 0, !!buyer.premiumRank);
+        const bonusCoins = Math.floor(coins * bonusRate / 100);
+
+        // 購入コイン+ランクボーナスを加算
         const updates = {
-          coins: FieldValue.increment(coins),
+          coins: FieldValue.increment(coins + bonusCoins),
           totalIssued: FieldValue.increment(coins),
         };
         if (grantInvite) {
@@ -122,6 +147,7 @@ export default async function handler(req, res) {
         tx.set(eventRef, {
           userId,
           coins,
+          bonusCoins,
           inviteGranted: grantInvite,
           processedAt: FieldValue.serverTimestamp(),
         });
