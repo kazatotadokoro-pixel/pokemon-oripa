@@ -1575,6 +1575,26 @@ function LoginBonusModal({onClose,claimedDates,onClaim,claiming}){
   );
 }
 
+// ===== ランクアップお祝いポップアップ =====
+function RankUpModal({info,onClose}){
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:3600,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(160deg,#0e0e1a,#1a1420)",borderRadius:20,width:"100%",maxWidth:400,border:"1px solid #ffd70055",fontFamily:"'Noto Sans JP',sans-serif",padding:"32px 24px",textAlign:"center"}}>
+        <div style={{fontSize:48,marginBottom:12}}>🎉</div>
+        <div style={{color:"#888",fontSize:13,marginBottom:6}}>おめでとうございます！</div>
+        <div style={{color:"#ffd700",fontWeight:900,fontSize:24,marginBottom:14}}>{info.name}に昇格しました！</div>
+        {info.bonus>0&&(
+          <div style={{background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.25)",borderRadius:12,padding:"10px 16px",marginBottom:20,display:"inline-block"}}>
+            <span style={{color:"#ffd700",fontWeight:900,fontSize:15}}>🪙 {info.bonus.toLocaleString()}コイン</span>
+            <span style={{color:"#888",fontSize:12}}> ボーナス獲得！</span>
+          </div>
+        )}
+        <button onClick={onClose} style={{width:"100%",background:"#ffd700",border:"none",color:"#000",padding:"14px",borderRadius:12,fontSize:15,fontWeight:900,cursor:"pointer"}}>やったー！</button>
+      </div>
+    </div>
+  );
+}
+
 // ===== 受信箱 =====
 function InboxModal({onClose,messages,readMessageIds,onRead}){
   const [tab,setTab]=useState("all");
@@ -2345,6 +2365,8 @@ export default function App(){
   const [rankIdx,setRankIdx]=useState(0); // 現在の会員ランク(RANK_TIERSのindex)
   const [rankSpendMonth,setRankSpendMonth]=useState(null); // rankMonthlySpendが対応する月(JST "YYYY-MM")
   const [rankMonthlySpend,setRankMonthlySpend]=useState(0); // その月の購入額(ランク判定用)
+  const [rankUpModal,setRankUpModal]=useState(null); // ランクアップ時のお祝いポップアップ表示用
+  const knownRankIdxRef=useRef(null); // ランクアップ検知用(セッション内での前回値)
   const [points,setPoints]=usePersistedState("points",0); // ログインボーナス等で貯まるポイント（コインとは別、法規制上の発行上限対象外）
 
   const MAX_ISSUED=10000000; // 1000万コイン上限
@@ -2437,7 +2459,16 @@ useEffect(()=>{
         if(data.totalIssued!==undefined)setTotalIssued(data.totalIssued);
         if(data.points!==undefined)setPoints(data.points);
         setPremiumRank(!!data.premiumRank);
-        if(data.rankIdx!==undefined)setRankIdx(data.rankIdx);
+        if(data.rankIdx!==undefined){
+          const prevIdx=knownRankIdxRef.current;
+          if(prevIdx!==null&&data.rankIdx>prevIdx&&!data.premiumRank){
+            let bonus=0;
+            for(let i=prevIdx+1;i<=data.rankIdx;i++)bonus+=RANK_TIERS[i].rankUpBonus;
+            setRankUpModal({name:RANK_TIERS[data.rankIdx].name,bonus});
+          }
+          knownRankIdxRef.current=data.rankIdx;
+          setRankIdx(data.rankIdx);
+        }
         if(data.rankSpendMonth!==undefined)setRankSpendMonth(data.rankSpendMonth);
         if(data.rankMonthlySpend!==undefined)setRankMonthlySpend(data.rankMonthlySpend);
         if(data.inviteCoins!==undefined)setInviteCoins(data.inviteCoins);
@@ -3008,6 +3039,7 @@ useEffect(()=>{
       {showAdminPanel&&<AdminPanel requests={shipRequests} onUpdate={(id,status)=>{setShipRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));if(user)setDoc(doc(db,"shipRequests",id),{status},{merge:true});}} onClose={()=>setShowAdminPanel(false)} totalIssued={totalIssued} maxIssued={MAX_ISSUED} onSendMessage={sendAdminMessage} onSetPremiumRank={callSetPremiumRank}/>}
       {showInbox&&<InboxModal onClose={()=>setShowInbox(false)} messages={messages} readMessageIds={readMessageIds} onRead={markMessageRead}/>}
       {showLoginBonus&&loginBonusClaims&&<LoginBonusModal onClose={()=>setShowLoginBonus(false)} claimedDates={loginBonusClaims} onClaim={claimLoginBonus} claiming={claimingBonus}/>}
+      {rankUpModal&&<RankUpModal info={rankUpModal} onClose={()=>setRankUpModal(null)}/>}
 
       {/* ログインモーダル */}
       {showAuthModal&&(
