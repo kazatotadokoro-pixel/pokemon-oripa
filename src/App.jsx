@@ -9,21 +9,44 @@ const LINE_OFFICIAL_URL = "https://lin.ee/xttvMwo";
 // プレミアだけは管理者が個別付与する招待制(premiumRankフラグ)。
 // 変更する場合は api/stripe-webhook.js 側の同名定義も合わせて変更すること。
 const RANK_TIERS = [
-  { name: "スタンダード会員", threshold: 0, bonusRate: 0 },
-  { name: "ブロンズ", threshold: 100000, bonusRate: 1 },
-  { name: "シルバー", threshold: 200000, bonusRate: 2 },
-  { name: "ゴールド", threshold: 800000, bonusRate: 3 },
-  { name: "プラチナ", threshold: 1600000, bonusRate: 4 },
-  { name: "ダイヤモンド", threshold: 3000000, bonusRate: 5 },
+  { name: "スタンダード会員", threshold: 0, bonusRate: 0, rankUpBonus: 0 },
+  { name: "ブロンズ", threshold: 100000, bonusRate: 1, rankUpBonus: 3000 },
+  { name: "シルバー", threshold: 200000, bonusRate: 2, rankUpBonus: 5000 },
+  { name: "ゴールド", threshold: 800000, bonusRate: 3, rankUpBonus: 20000 },
+  { name: "プラチナ", threshold: 1600000, bonusRate: 4, rankUpBonus: 40000 },
+  { name: "ダイヤモンド", threshold: 3000000, bonusRate: 5, rankUpBonus: 100000 },
 ];
 const PREMIUM_RANK = { name: "プレミア", bonusRate: 10 };
-function getRankInfo(totalIssued, premiumRank) {
-  if (premiumRank) return { ...PREMIUM_RANK, next: null };
-  let idx = 0;
-  for (let i = 0; i < RANK_TIERS.length; i++) {
-    if (totalIssued >= RANK_TIERS[i].threshold) idx = i;
+// 会員ランクは毎月リセット式。今月の購入額(rankMonthlySpend)が今のランクの閾値に届かないと、
+// 翌月1ランクだけ降格する(何ヶ月も購入がなければ1ヶ月ごとに1段ずつ下がっていく)。
+// ランクアップ(閾値超え)は購入額加算と同時に即時判定・複数段の同時アップも可。
+function thisMonthJstStr() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(new Date());
+}
+function nextMonthStr(m) {
+  const [y, mm] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y, mm, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+// 保存されている(rankIdx, spendMonth, monthlySpend)を、実際の「今月」まで進めて
+// 未購入期間の降格を反映した実効ランクを計算する(表示・付与どちらにも使う純粋関数)
+function rollForwardRank(rankIdx, spendMonth, monthlySpend, nowMonth) {
+  if (!spendMonth) return { idx: 0, spend: 0 };
+  let idx = rankIdx || 0;
+  let spend = monthlySpend || 0;
+  let month = spendMonth;
+  while (month < nowMonth) {
+    if (spend < RANK_TIERS[idx].threshold) idx = Math.max(0, idx - 1);
+    spend = 0;
+    month = nextMonthStr(month);
   }
-  return { ...RANK_TIERS[idx], next: RANK_TIERS[idx + 1] || null };
+  return { idx, spend };
+}
+function getRankInfo(rankIdx, rankSpendMonth, rankMonthlySpend, premiumRank) {
+  if (premiumRank) return { ...PREMIUM_RANK, next: null, monthlySpend: null };
+  const nowMonth = thisMonthJstStr();
+  const { idx, spend } = rollForwardRank(rankIdx, rankSpendMonth, rankMonthlySpend, nowMonth);
+  return { ...RANK_TIERS[idx], idx, next: RANK_TIERS[idx + 1] || null, monthlySpend: spend };
 }
 
 const REAL_CARDS = {
@@ -2318,6 +2341,9 @@ export default function App(){
   const [coins,setCoins]=usePersistedState("coins",1250);
   const [totalIssued,setTotalIssued]=usePersistedState("totalIssued",0); // 累計発行コイン残高
   const [premiumRank,setPremiumRank]=useState(false); // 管理者が個別付与するプレミアランク認定
+  const [rankIdx,setRankIdx]=useState(0); // 現在の会員ランク(RANK_TIERSのindex)
+  const [rankSpendMonth,setRankSpendMonth]=useState(null); // rankMonthlySpendが対応する月(JST "YYYY-MM")
+  const [rankMonthlySpend,setRankMonthlySpend]=useState(0); // その月の購入額(ランク判定用)
   const [points,setPoints]=usePersistedState("points",0); // ログインボーナス等で貯まるポイント（コインとは別、法規制上の発行上限対象外）
 
   const MAX_ISSUED=10000000; // 1000万コイン上限
@@ -2410,6 +2436,9 @@ useEffect(()=>{
         if(data.totalIssued!==undefined)setTotalIssued(data.totalIssued);
         if(data.points!==undefined)setPoints(data.points);
         setPremiumRank(!!data.premiumRank);
+        if(data.rankIdx!==undefined)setRankIdx(data.rankIdx);
+        if(data.rankSpendMonth!==undefined)setRankSpendMonth(data.rankSpendMonth);
+        if(data.rankMonthlySpend!==undefined)setRankMonthlySpend(data.rankMonthlySpend);
         if(data.inviteCoins!==undefined)setInviteCoins(data.inviteCoins);
         if(data.inviteCount!==undefined)setInviteCount(data.inviteCount);
         if(data.myInviteCode!==undefined)setMyInviteCode(data.myInviteCode);
@@ -2793,9 +2822,10 @@ useEffect(()=>{
               </div>
             </div>
             {!isGuest&&(()=>{
-              const safeTotalIssued=Math.max(0,totalIssued);
-              const rankInfo=getRankInfo(safeTotalIssued,premiumRank);
-              const pct=rankInfo.next?Math.min(100,Math.max(0,Math.round(((safeTotalIssued-rankInfo.threshold)/(rankInfo.next.threshold-rankInfo.threshold))*100))):100;
+              const rankInfo=getRankInfo(rankIdx,rankSpendMonth,rankMonthlySpend,premiumRank);
+              const spend=rankInfo.monthlySpend||0;
+              const pct=rankInfo.next?Math.min(100,Math.max(0,Math.round((spend/rankInfo.next.threshold)*100))):100;
+              const atRisk=!premiumRank&&rankInfo.idx>0&&spend<rankInfo.threshold;
               return(
                 <div style={{background:"linear-gradient(135deg,rgba(255,215,0,0.08),rgba(217,79,110,0.06))",border:"1px solid rgba(255,215,0,0.2)",borderRadius:14,padding:"14px 16px",margin:"16px 0"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
@@ -2805,13 +2835,18 @@ useEffect(()=>{
                     </div>
                     <span style={{color:"#888",fontSize:11}}>コイン購入+{rankInfo.bonusRate}%</span>
                   </div>
-                  {rankInfo.next?(
+                  {premiumRank?(
+                    <div style={{color:"#555",fontSize:11}}>招待制ランク(月次のランク変動対象外)</div>
+                  ):rankInfo.next?(
                     <>
                       <div style={{background:"#1a1a2a",borderRadius:4,height:6,overflow:"hidden"}}><div style={{width:`${pct}%`,height:"100%",background:"linear-gradient(90deg,#ffd700,#ff8099)",borderRadius:4}}/></div>
-                      <div style={{color:"#555",fontSize:11,marginTop:6}}>次の{rankInfo.next.name}まで累計¥{Math.max(0,rankInfo.next.threshold-safeTotalIssued).toLocaleString()}(現在の累計課金額 ¥{safeTotalIssued.toLocaleString()})</div>
+                      <div style={{color:"#555",fontSize:11,marginTop:6}}>今月の購入実績 ¥{spend.toLocaleString()}(次の{rankInfo.next.name}まであと¥{Math.max(0,rankInfo.next.threshold-spend).toLocaleString()})</div>
                     </>
                   ):(
-                    <div style={{color:"#555",fontSize:11}}>最上位ランクです(累計課金額 ¥{safeTotalIssued.toLocaleString()})</div>
+                    <div style={{color:"#555",fontSize:11}}>最上位ランクです(今月の購入実績 ¥{spend.toLocaleString()})</div>
+                  )}
+                  {atRisk&&(
+                    <div style={{color:"#ff9020",fontSize:11,marginTop:6}}>⚠️ 今月中に¥{rankInfo.threshold.toLocaleString()}まで購入がないと、来月1ランク降格します</div>
                   )}
                 </div>
               );
