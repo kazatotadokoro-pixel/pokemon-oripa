@@ -352,7 +352,7 @@ function metTitleCanvas(i){
   x.textAlign = 'center'; x.textBaseline = 'middle';
   const T = BT[i];
   let fs = 118; x.font = `600 ${fs}px ${MFONT_EN}`; if('letterSpacing' in x) x.letterSpacing = '26px';
-  while(x.measureText(T.en).width > 960 && fs > 50){ fs -= 4; x.font = `600 ${fs}px ${MFONT_EN}`; if('letterSpacing' in x) x.letterSpacing = Math.round(fs*.2)+'px'; }
+  while(x.measureText(T.en).width > 880 && fs > 50){ fs -= 4; x.font = `600 ${fs}px ${MFONT_EN}`; if('letterSpacing' in x) x.letterSpacing = Math.round(fs*.2)+'px'; }
   const tw = x.measureText(T.en).width;
   let g;
   if(T.rainbow){ g = x.createLinearGradient(540-tw/2,0,540+tw/2,0); ['#ff8fb8','#ffe38a','#8fffb8','#8fd8ff','#c9a0ff'].forEach((s,k,a)=>g.addColorStop(k/(a.length-1),s)); }
