@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "./firebase.js";
+import NovaReveal from "./nova/NovaReveal.jsx";
+import { novaSupported, tierFromRank, primeNovaAudio } from "./nova/novaEngine.js";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, signInWithPhoneNumber, GoogleAuthProvider, signInWithPopup, linkWithPopup } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, increment, collection, addDoc, deleteDoc, query, orderBy, limit, serverTimestamp, where, getCountFromServer } from "firebase/firestore";
 
@@ -287,7 +289,8 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
     :rankNum===4?{bg:"linear-gradient(135deg,#001040,#2266ff,#88aaff,#2266ff,#001040)",border:"#2266ff",glow:"rgba(34,102,255,0.6)",label:"4等",shimmer:false,rainbow:false}
     :{bg:"linear-gradient(135deg,#111,#444,#888,#444,#111)",border:"#555",glow:"rgba(100,100,100,0.3)",label:"ハズレ",shimmer:false,rainbow:false};
 
-  const [phase,setPhase]=useState("ball"); // ball(ボール昇格演出) → card(登場) → done(結果)
+  const [phase,setPhase]=useState("ball"); // ball(開封演出: 超新星 or ボール昇格) → card(登場) → done(結果)
+  const [useNova,setUseNova]=useState(()=>novaSupported()); // WebGL2 非対応端末は従来のボール演出にフォールバック
   const [revealed,setRevealed]=useState(!isPuchun);
   const [tilt,setTilt]=useState({x:0,y:0});
   const cardRef=useRef(null);
@@ -302,10 +305,14 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
   })),[rankNum]);
 
   if(phase==="ball"){
-    return <BallReveal rankNum={rankNum} onDone={()=>{
+    const afterReveal=()=>{
       setPhase("card");
       cardTimers.current.push(setTimeout(()=>setPhase("done"),750));
-    }}/>;
+    };
+    if(useNova){
+      return <NovaReveal tier={tierFromRank(rankNum)} cardImage={card.isReal?card.img:null} onDone={afterReveal} onUnsupported={()=>setUseNova(false)}/>;
+    }
+    return <BallReveal rankNum={rankNum} onDone={afterReveal}/>;
   }
 
   return(
@@ -2611,6 +2618,7 @@ useEffect(()=>{
   };
 
   const doDraw=(pack)=>requirePurchase(async()=>{
+    primeNovaAudio(); // 開封演出の効果音用（スマホはタップ直後でないと音を鳴らせない）
     if(remainings[pack.id]<=0){notify("残り口数がありません");return;}
     if(coins<pack.price){notify(`コインが足りません 🪙 (必要: ${pack.price.toLocaleString()})`);return;}
     // サーバーで抽選・コイン減算・在庫減算を行う（水増し防止）
