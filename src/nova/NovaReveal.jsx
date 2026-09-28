@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createNovaPlayer, setNovaSound, primeNovaAudio } from "./novaEngine.js";
+import { RANK_CARDS } from "./rankCards.js";
 
 const SOUND_KEY = "oripaluck_nova_sound";
 const readSound = () => { try { return localStorage.getItem(SOUND_KEY) !== "off"; } catch (e) { return true; } };
 
 // 超新星の開封演出（全画面）。終わったら onDone を呼ぶ。
-// tier: 0=ハズレ 1=4等 2=3等 3=2等 4=1等 / cardImage: 当たりカードの画像URL（data: でも可）
+// tier: 0=ハズレ 1=4等 2=3等 3=2等 4=1等 / cardImage: 最後に出すカード画像（省略時は等級カード）
 export default function NovaReveal({ tier, cardImage, onDone, onUnsupported }) {
   const canvasRef = useRef(null);
   const playerRef = useRef(null);
@@ -15,7 +16,7 @@ export default function NovaReveal({ tier, cardImage, onDone, onUnsupported }) {
   useEffect(() => {
     setNovaSound(sound);
     const finish = () => { if (doneRef.current) return; doneRef.current = true; onDone && onDone(); };
-    const p = createNovaPlayer(canvasRef.current, { tier, cardImage, onDone: finish });
+    const p = createNovaPlayer(canvasRef.current, { tier, cardImage: cardImage || RANK_CARDS[tier], onDone: finish });
     if (!p) { onUnsupported ? onUnsupported() : finish(); return; }
     playerRef.current = p;
     p.start();

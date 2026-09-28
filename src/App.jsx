@@ -310,7 +310,7 @@ function CardReveal({card,pack,onClose,onConfirm,onRedeem}){
       cardTimers.current.push(setTimeout(()=>setPhase("done"),750));
     };
     if(useNova){
-      return <NovaReveal tier={tierFromRank(rankNum)} cardImage={card.isReal?card.img:null} onDone={afterReveal} onUnsupported={()=>setUseNova(false)}/>;
+      return <NovaReveal tier={tierFromRank(rankNum)} onDone={afterReveal} onUnsupported={()=>setUseNova(false)}/>;
     }
     return <BallReveal rankNum={rankNum} onDone={afterReveal}/>;
   }
