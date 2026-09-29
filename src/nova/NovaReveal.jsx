@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createNovaPlayer, setNovaSound, primeNovaAudio } from "./novaEngine.js";
+import { createNovaPlayer, setNovaSound, primeNovaAudio, wakeNovaAudio } from "./novaEngine.js";
 import { RANK_CARDS } from "./rankCards.js";
 
 const SOUND_KEY = "oripaluck_nova_sound";
@@ -35,7 +35,7 @@ export default function NovaReveal({ tier, cardImage, onDone, onUnsupported }) {
 
   const btn = { background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", color: "rgba(255,255,255,0.75)", padding: "9px 20px", borderRadius: 30, fontSize: 13, cursor: "pointer", fontFamily: "'Noto Sans JP',sans-serif", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" };
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#000", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", touchAction: "none" }}>
+    <div onPointerDown={() => { if (sound) wakeNovaAudio(); }} style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#000", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", touchAction: "none" }}>
       <canvas ref={canvasRef} style={{ height: "min(100dvh, calc(100vw * 16 / 9))", width: "min(100vw, calc(100dvh * 9 / 16))", display: "block" }} />
       <button onClick={toggleSound} aria-label={sound ? "効果音をオフ" : "効果音をオン"} style={{ ...btn, position: "absolute", bottom: "calc(24px + env(safe-area-inset-bottom, 0px))", left: 20 }}>{sound ? "🔊" : "🔇"}</button>
       <button onClick={skip} style={{ ...btn, position: "absolute", bottom: "calc(24px + env(safe-area-inset-bottom, 0px))", right: 20 }}>スキップ →</button>

@@ -669,12 +669,24 @@ function frameNova(S,t){
 
 function novaSounds(S,fromT,speed){
   const base = AC.currentTime - fromT/speed, T = x => base + x/speed;
-  const comp = AC.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .25; comp.connect(master);
+  const comp = AC.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .25;
+  const sat = AC.createWaveShaper(); sat.curve = satCurve(); sat.oversample = '4x';
+  const makeup = AC.createGain(); makeup.gain.value = .65;
+  const lim = AC.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = .001; lim.release.value = .12;
+  comp.connect(sat); sat.connect(makeup); makeup.connect(lim); lim.connect(master);
   const dry = AC.createGain(); dry.gain.value = .85; dry.connect(comp);
   const rev = AC.createConvolver(); rev.buffer = metIR(); const wet = AC.createGain(); wet.gain.value = .6; rev.connect(wet); wet.connect(comp);
   const route = (node, send=.5, pan=0) => { let n = node; if(pan && AC.createStereoPanner){ const p = AC.createStereoPanner(); p.pan.value = pan; n.connect(p); n = p; } n.connect(dry); const s = AC.createGain(); s.gain.value = send; n.connect(s); s.connect(rev); return n; };
   const env = (g, t0, peak, att, dur) => { g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(peak, t0+att); g.gain.exponentialRampToValueAtTime(.0001, t0+dur); };
-  const osc = (type, f, t0, dur, peak, o={}) => { const s = AC.createOscillator(), g = AC.createGain(); s.type = type; s.frequency.setValueAtTime(f, t0); if(o.f2) s.frequency.exponentialRampToValueAtTime(o.f2, t0+(o.glide||dur)); if(o.detune) s.detune.value = o.detune; env(g, t0, peak, o.att||.005, dur); s.connect(g); route(g, o.send ?? .5, o.pan||0); s.start(t0); s.stop(t0+dur+.1); scheduled.push(s); return s; };
+  const osc0 = (type, f, t0, dur, peak, o={}) => { const s = AC.createOscillator(), g = AC.createGain(); s.type = type; s.frequency.setValueAtTime(f, t0); if(o.f2) s.frequency.exponentialRampToValueAtTime(o.f2, t0+(o.glide||dur)); if(o.detune) s.detune.value = o.detune; env(g, t0, peak, o.att||.005, dur); s.connect(g); route(g, o.send ?? .5, o.pan||0); s.start(t0); s.stop(t0+dur+.1); scheduled.push(s); return s; };
+  const osc = (type, f, t0, dur, peak, o={}) => {
+    const s0 = osc0(type, f, t0, dur, peak, o);
+    if(type === 'sine' && f < 140){                      // body layer: 2.5x / 4x harmonics + a click so the hit reads on phone speakers
+      osc0('triangle', f*2.5, t0, Math.min(dur, .9), peak*.45, {...o, f2: o.f2 ? o.f2*2.5 : undefined});
+      osc0('sawtooth', f*4, t0, Math.min(dur, .35), peak*.12, {...o, f2: o.f2 ? o.f2*4 : undefined, send: .2});
+    }
+    return s0;
+  };
   const bell = (t0, f, peak, send=.8, pan=0) => { const c = AC.createOscillator(), m = AC.createOscillator(), mg = AC.createGain(), g = AC.createGain();
     c.frequency.value = f; m.frequency.value = f*3.5; mg.gain.setValueAtTime(f*2.2, t0); mg.gain.exponentialRampToValueAtTime(f*.05, t0+1.6);
     m.connect(mg); mg.connect(c.frequency); env(g, t0, peak, .003, 2.8); c.connect(g); route(g, send, pan);
@@ -690,10 +702,10 @@ function novaSounds(S,fromT,speed){
   const w0 = Math.max(fromT, .5);
   if(w0 < S.warpEnd){
     const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 3; const g = AC.createGain();
-    for(let x = w0; x <= S.warpEnd + .05; x += .05){ const v = S.speedAt(x); lp.frequency.setValueAtTime(180 + v*1500, T(x)); }
-    g.gain.setValueAtTime(0, T(w0)); g.gain.linearRampToValueAtTime(.07, T(Math.min(S.warpEnd, 2.4))); g.gain.setValueAtTime(.07, T(S.warpEnd - .02)); g.gain.linearRampToValueAtTime(0, T(S.warpEnd + .04));
+    for(let x = w0; x <= S.warpEnd + .05; x += .05){ const v = S.speedAt(x); lp.frequency.setValueAtTime(420 + v*2600, T(x)); }
+    g.gain.setValueAtTime(0, T(w0)); g.gain.linearRampToValueAtTime(.08, T(Math.min(S.warpEnd, 2.4))); g.gain.setValueAtTime(.08, T(S.warpEnd - .02)); g.gain.linearRampToValueAtTime(0, T(S.warpEnd + .04));
     lp.connect(g); route(g, .35);
-    [[55,-8],[55,8],[110,0],[82.4,-4]].forEach(([f,dt]) => { const s = AC.createOscillator(); s.type = 'sawtooth'; s.frequency.setValueAtTime(f, T(w0)); s.frequency.linearRampToValueAtTime(f*1.6, T(S.warpEnd)); s.detune.value = dt; s.connect(lp); s.start(T(w0)); s.stop(T(S.warpEnd + .1)); scheduled.push(s); });
+    [[55,-8],[55,8],[110,0],[82.4,-4],[220,5],[330,-6],[440,3]].forEach(([f,dt]) => { const s = AC.createOscillator(); s.type = 'sawtooth'; s.frequency.setValueAtTime(f, T(w0)); s.frequency.linearRampToValueAtTime(f*1.6, T(S.warpEnd)); s.detune.value = dt; s.connect(lp); s.start(T(w0)); s.stop(T(S.warpEnd + .1)); scheduled.push(s); });
     nz(T(w0), S.warpEnd - w0, .09, {f0:600, f1:2600, Q:.8, att:1.2, send:.3});
   }
   ev(.4, a => { osc('sine', 38, a, 2.2, .35, {f2:70, att:1.5, send:.3}); bell(a+.1, 1318.5, .03, .95); });
@@ -750,11 +762,35 @@ export function novaSupported(){
 // ガチャボタンを押した瞬間に呼ぶ（スマホは操作の直後でないと音が鳴らせないため）
 export function primeNovaAudio(){
   try {
-    if(!AC){ AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .55; master.connect(AC.destination); }
-    if(AC.state === 'suspended') AC.resume();
+    // iPhone: play through the silent switch like a game/video would
+    try { if(navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e){}
+    if(!AC){ AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .9; master.connect(AC.destination); }
+    if(AC.state !== 'running') AC.resume();
+    // unlock (iOS needs a sound started inside the tap)
+    const b = AC.createBuffer(1, 1, AC.sampleRate), src = AC.createBufferSource(); src.buffer = b; src.connect(AC.destination); src.start(0);
   } catch(e){}
 }
+function satCurve(){
+  const n = 2048, c = new Float32Array(n), k = 2.2;
+  for(let i=0;i<n;i++){ const x = i/(n-1)*2 - 1; c[i] = Math.tanh(k*x)/Math.tanh(k); }
+  return c;
+}
 export function setNovaSound(on){ soundOn = !!on; if(!on) stopSounds(); else if(MT && MT.resync) MT.resync(); }
+export function novaAudioRunning(){ return !!(AC && AC.state === 'running'); }
+// 演出中にタップされたとき: 音が止まっていたら起こして、今の位置から鳴らし直す
+export function wakeNovaAudio(){
+  const wasRunning = novaAudioRunning();
+  primeNovaAudio();
+  if(soundOn && !wasRunning && MT && MT.resync) setTimeout(() => MT && MT.resync && MT.resync(), 60);
+}
+// 検証用: 効果音をオフラインで書き出して AudioBuffer を返す
+export async function renderNovaAudio(tier){
+  const S = scheduleNova(tier), sr = 44100, off = new OfflineAudioContext(2, Math.ceil(sr*(S.end+1)), sr);
+  const keep = [AC, master, scheduled, MT];
+  AC = off; master = off.createGain(); master.gain.value = .9; master.connect(off.destination); scheduled = []; MT = MT || {};
+  try { novaSounds(S, 0, 1); return await off.startRendering(); }
+  finally { [AC, master, scheduled, MT] = keep; }
+}
 function stopSounds(){ scheduled.forEach(n => { try { n.stop(); } catch(e){} }); scheduled = []; }
 
 function initGL(canvas){
